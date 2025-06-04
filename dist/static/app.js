@@ -551,9 +551,9 @@ function clearFeedbackForm() {
 const DEFAULT_QUICK_PHRASE = `
 
 ---
-当你需要询问用户问题时, 应请求用户提供反馈, 并使用mcp-feedback-collector.collect_feedback函数来收集反馈.
+- 当你需要询问用户问题时, 应请求用户提供反馈, 并使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
 
-每当您要完成用户请求时，请调用mcp-feedback-collector.collect_feedback函数，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。
+- 每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。
 `
 // 获取自定义快捷语
 function getCustomQuickPhrase() {
