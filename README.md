@@ -8,158 +8,28 @@
 
 ## ✨ 特性
 
-- 🚀 **一键启动**: 使用 `npx mcp-feedback-collector` 直接运行
 - 🎨 **现代界面**: VS Code深色主题风格的Web界面
 - 🔧 **MCP集成**: 完整支持Model Context Protocol
-- 💬 **AI对话功能**: 集成AI助手，支持文字和图片对话
 - 🖼️ **图片支持**: 完整的图片上传、处理和显示功能
 - 🌐 **跨平台**: 支持Windows、macOS、Linux
 - ⚡ **高性能**: 解决了Python版本的稳定性问题
 
-## 开发过程视频教程
-油管：https://youtu.be/CHVRJtg9vFw
-B站：https://www.bilibili.com/video/BV1147tzJE8T/
 
 ## 🚀 快速开始
 
 ### 安装和运行
 
 ```bash
-# 直接运行（推荐）
-npx mcp-feedback-collector
-
-# 或者全局安装
-npm install -g mcp-feedback-collector
-mcp-feedback-collector
-```
-
-### 配置环境变量
-
-创建 `.env` 文件：
-
-```bash
-# AI API配置
-MCP_API_KEY="your_api_key_here"
-MCP_API_BASE_URL="https://api.ssopen.top"  # 中转站，也可使用OpenAI官方API
-MCP_DEFAULT_MODEL="grok-3"
-
-# Web服务器配置
-MCP_WEB_PORT="5000"
-MCP_DIALOG_TIMEOUT="60000"  # 反馈收集超时时间（秒），范围：10-60000
-
-# 功能开关
-MCP_ENABLE_CHAT="true"
-
-# URL和端口优化配置 (v2.0.7新增)
-MCP_USE_FIXED_URL="true"           # 使用固定URL，不带会话参数 (默认: true)
-MCP_FORCE_PORT="false"             # 强制使用指定端口 (默认: false)
-MCP_KILL_PORT_PROCESS="false"      # 自动终止占用进程 (默认: false)
-MCP_CLEANUP_PORT_ON_START="true"   # 启动时清理端口 (默认: true)
+# 安装包
+npm install
+# 构建
+npm run build 
 ```
 
 ## 🔧 使用方法
 
-### 命令行选项
 
-```bash
-# 启动服务器（默认）
-mcp-feedback-collector
-
-# 指定端口
-mcp-feedback-collector --port 8080
-
-# 仅Web模式
-mcp-feedback-collector --web
-
-# 测试collect_feedback功能
-mcp-feedback-collector test-feedback
-
-# 自定义测试内容
-mcp-feedback-collector test-feedback -m "我的工作汇报" -t 120
-
-# 健康检查
-mcp-feedback-collector health
-
-# 显示配置
-mcp-feedback-collector config
-```
-
-### Claude Desktop集成
-
-#### 方式一：NPM包运行（推荐）
-
-在Claude Desktop，cursor的MCP配置中添加：
-
-```json
-{
-  "mcpServers": {
-    "mcp-feedback-collector": {
-      "command": "npx",
-      "args": ["-y", "mcp-feedback-collector@latest"],
-      "env": {
-        "MCP_API_KEY": "your_api_key_here",
-        "MCP_API_BASE_URL": "https://api.ssopen.top",
-        "MCP_DEFAULT_MODEL": "grok-3",
-        "MCP_WEB_PORT": "5050",
-        "MCP_DIALOG_TIMEOUT": "60000"
-      }
-    }
-  }
-}
-```
-
-#### 方式二：源码运行（本地开发）
-
-如果您克隆了源码并想直接运行，可以使用以下配置：
-
-```json
-{
-  "mcpServers": {
-    "mcp-feedback-collector": {
-      "command": "node",
-      "args": ["path/to/your/project/dist/cli.js"],
-      "env": {
-        "MCP_API_KEY": "your_api_key_here",
-        "MCP_API_BASE_URL": "https://api.ssopen.top",
-        "MCP_DEFAULT_MODEL": "grok-3",
-        "MCP_WEB_PORT": "5050",
-        "MCP_DIALOG_TIMEOUT": "60000"
-      }
-    }
-  }
-}
-```
-
-**注意**：
-- 将 `path/to/your/project` 替换为您的实际项目路径
-- 确保已运行 `npm run build` 构建项目
-- 使用绝对路径，例如：`d:/zhuomian/nodejsweb/dist/cli.js`
-
-#### 方式三：TypeScript源码直接运行（开发模式）
-
-如果您想直接运行TypeScript源码而无需构建：
-
-```json
-{
-  "mcpServers": {
-    "mcp-feedback-collector": {
-      "command": "npx",
-      "args": ["tsx", "path/to/your/project/src/cli.ts"],
-      "env": {
-        "MCP_API_KEY": "your_api_key_here",
-        "MCP_API_BASE_URL": "https://api.ssopen.top",
-        "MCP_DEFAULT_MODEL": "grok-3",
-        "MCP_WEB_PORT": "5050",
-        "MCP_DIALOG_TIMEOUT": "60000",
-        "NODE_ENV": "development"
-      }
-    }
-  }
-}
-```
-
-**优点**：无需构建，直接运行源码
-**缺点**：启动稍慢，需要tsx依赖
+### Cursor集成
 
 #### 🚀 快速配置示例
 
@@ -172,9 +42,6 @@ mcp-feedback-collector config
       "command": "node",
       "args": ["d:/zhuomian/nodejsweb/dist/cli.js"],
       "env": {
-        "MCP_API_KEY": "your_api_key_here",
-        "MCP_API_BASE_URL": "https://api.ssopen.top",
-        "MCP_DEFAULT_MODEL": "grok-3",
         "MCP_WEB_PORT": "5050",
         "MCP_DIALOG_TIMEOUT": "60000"
       }
@@ -186,25 +53,15 @@ mcp-feedback-collector config
 **配置步骤**：
 1. 确保项目已构建：`npm run build`
 2. 将上述配置添加到Cursor的MCP设置中
-3. 替换 `your_api_key_here` 为您的实际API密钥
-4. 重启Cursor，查看MCP服务器状态为绿色
-## 在cursor规则中可以下面这样配置
-“Whenever you want to ask a question, always call the MCP .
+3. 重启Cursor，查看MCP服务器状态为绿色
+## 在cursor全局规则中加入如下规则
+```text
+- 当你需要询问用户问题时, 应请求用户提供反馈, 并使用mcp-feedback-collector.collect_feedback函数来收集反馈.
 
-Whenever you’re about to complete a user request, call the MCP instead of simply ending the process. Keep calling MCP until the user’s feedback is empty, then end the request. mcp-feedback-collector.collect_feedback ”
+- 每当您要完成用户请求时，请调用mcp-feedback-collector.collect_feedback函数，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。
+```
 
-
-⚠️ **重要提醒**:
-- **不要在args中添加`--debug`参数**，这会导致JSON解析失败
-- Cursor/Claude Desktop要求极其纯净的JSON输出
-- 如需调试，请在命令行中单独使用：`npx mcp-feedback-collector --debug`
-
-💡 **API服务推荐**:
-- 默认配置使用 `https://api.ssopen.top` 中转站，支持多种AI模型
-- 也可以使用OpenAI官方API：`https://api.openai.com/v1`
-- 或其他兼容OpenAI格式的API服务
-
-## 🆕 最新功能 (v2.0.8)
+## 🆕 改动
 
 ### 🎨 UI简化优化
 - **纯文字状态显示**: 移除旋转动画，简洁直观
@@ -216,14 +73,7 @@ Whenever you’re about to complete a user request, call the MCP instead of simp
 - **会话自动重置**: 解决"对话过期"问题
 - **无缝体验**: 3秒倒计时提示
 
-### 📝 表单体验改进
-- **自动清空**: 提交后自动清空输入框
-- **持续可用**: 页面保持打开状态
 
-### 🔗 固定URL模式 (v2.0.7)
-- 使用固定根路径：`http://localhost:5000`
-- 支持多个并发会话
-- 便于远程服务器转发
 
 ## 🛠️ MCP工具函数
 
@@ -303,137 +153,3 @@ collect_feedback("我已经完成了代码重构工作，主要改进了性能�
    # 使用其他端口
    mcp-feedback-collector --port 5001
    ```
-
-3. **API密钥错误**
-   ```bash
-   # 检查配置
-   mcp-feedback-collector config
-
-   # 设置环境变量
-   export MCP_API_KEY="your_key_here"
-   ```
-
-4. **权限问题**
-   ```bash
-   # 使用npx避免全局安装权限问题
-   npx mcp-feedback-collector
-   ```
-
-详细的故障排除指南请参考: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-
-## 📚 完整文档
-
-本项目提供了完整的文档体系，请参考 [📚 文档索引](DOCUMENTATION_INDEX.md) 查找您需要的信息：
-
-- **用户指南**: [USER_GUIDE.md](USER_GUIDE.md) - 详细使用说明
-- **配置指南**: [CONFIGURATION.md](CONFIGURATION.md) - 环境变量配置
-- **技术文档**: [ARCHITECTURE.md](ARCHITECTURE.md) - 系统架构设计
-- **故障排除**: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - 问题解决方案
-- **版本说明**: [RELEASE_NOTES.md](RELEASE_NOTES.md) - 版本更新记录
-
-## 📝 开发
-
-### 本地开发
-
-```bash
-# 克隆项目
-git clone https://github.com/sanshao85/mcp-feedback-collector-web.git
-cd mcp-feedback-collector-web
-
-# 安装依赖
-npm install
-
-# 开发模式（实时编译TypeScript）
-npm run dev
-
-# 构建项目（生成dist目录）
-npm run build
-
-# 启动已构建的项目
-npm start
-
-# 测试
-npm test
-
-# 健康检查
-npm start health
-
-# 显示配置
-npm start config
-```
-
-#### MCP配置测试
-
-构建完成后，您可以使用以下配置在Cursor中测试：
-
-```json
-{
-  "mcpServers": {
-    "mcp-feedback-collector": {
-      "command": "node",
-      "args": ["您的项目路径/dist/cli.js"],
-      "env": {
-        "MCP_API_KEY": "your_api_key_here",
-        "MCP_API_BASE_URL": "https://api.ssopen.top",
-        "MCP_DEFAULT_MODEL": "grok-3",
-        "MCP_WEB_PORT": "5050",
-        "MCP_DIALOG_TIMEOUT": "60000"
-      }
-    }
-  }
-}
-```
-
-### 项目结构
-
-```
-src/
-├── cli.ts              # CLI入口
-├── index.ts            # 主入口
-├── config/             # 配置管理
-├── server/             # 服务器实现
-├── utils/              # 工具函数
-├── types/              # 类型定义
-└── static/             # 静态文件
-```
-
-## 📄 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
-## 🤝 贡献
-
-欢迎提交Issue和Pull Request！
-
-1. Fork 本仓库
-2. 创建您的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开一个Pull Request
-
-## 🔗 相关链接
-
-- **项目主页**: [GitHub Repository](https://github.com/sanshao85/mcp-feedback-collector-web)
-- **NPM包**: [mcp-feedback-collector](https://www.npmjs.com/package/mcp-feedback-collector)
-- **Model Context Protocol**: [官方网站](https://modelcontextprotocol.io)
-- **MCP规范**: [技术规范](https://spec.modelcontextprotocol.io)
-- **Claude Desktop**: [下载地址](https://claude.ai/desktop)
-
-## 📊 项目状态
-
-- **当前版本**: v2.0.8
-- **维护状态**: 积极维护
-- **支持平台**: Windows, macOS, Linux
-
-## 📚 文档导航
-
-- **[用户指南](USER_GUIDE.md)** - 详细使用说明和最佳实践
-- **[配置文档](CONFIGURATION.md)** - 环境变量和配置选项
-- **[故障排除](TROUBLESHOOTING.md)** - 常见问题和解决方案
-- **[开发文档](DEVELOPMENT.md)** - 开发环境搭建和贡献指南
-- **[技术文档](TECHNICAL.md)** - 系统架构和技术细节
-- **[更新日志](CHANGELOG.md)** - 版本变更历史
-- **[发布说明](RELEASE_NOTES.md)** - 详细的发布信息
-
-## 感谢支持
-https://api.ssopen.top/ API中转站，290+AI 大模型，官方成本七分之一，支持高并发！
