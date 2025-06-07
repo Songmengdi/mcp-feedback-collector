@@ -767,28 +767,20 @@
             font-size: 14px;
         }
 
-        /* 快捷键提示样式 */
-        .shortcut-hint {
-            text-align: center;
-            margin-top: 12px;
-            color: #969696;
+        /* 按钮内快捷键样式 */
+        .btn-shortcut {
+            opacity: 0.6;
             font-size: 12px;
-            line-height: 1.4;
-        }
-
-        .shortcut-hint kbd {
-            background: #2d2d30;
-            border: 1px solid #464647;
-            border-radius: 3px;
-            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
-            color: #cccccc;
-            display: inline-block;
-            font-family: "Consolas", "Monaco", "Courier New", monospace;
-            font-size: 11px;
-            line-height: 1.4;
-            margin: 0 2px;
+            font-weight: 300;
+            margin-left: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: rgba(255, 255, 255, 0.1);
             padding: 2px 6px;
-            white-space: nowrap;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: inline-block;
+            line-height: 1;
+            vertical-align: middle;
         }
 
         /* 滚动条样式 */
@@ -921,11 +913,8 @@
                                         清空
                                     </button>
                                     <button type="submit" class="btn btn-primary" id="submit-feedback-btn">
-                                        提交反馈
+                                        提交反馈 <span class="btn-shortcut" id="btn-shortcut"></span>
                                     </button>
-                                </div>
-                                <div class="shortcut-hint" id="shortcut-hint">
-                                    💡 快捷键: <kbd id="shortcut-keys"></kbd>
                                 </div>
                             </form>
                         </div>

@@ -638,15 +638,15 @@ document.getElementById('feedback-text').addEventListener('paste', function(e) {
 // 设置平台相关的快捷键提示
 function setupShortcutHint() {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    const shortcutKeysElement = document.getElementById('shortcut-keys');
+    const btnShortcutElement = document.getElementById('btn-shortcut');
     const submitBtn = document.getElementById('submit-feedback-btn');
     
-    if (shortcutKeysElement && submitBtn) {
+    if (btnShortcutElement && submitBtn) {
         if (isMac) {
-            shortcutKeysElement.textContent = 'Cmd+Enter';
+            btnShortcutElement.textContent = '⌘⏎';
             submitBtn.title = '快捷键: Cmd+Enter';
         } else {
-            shortcutKeysElement.textContent = 'Ctrl+Enter';
+            btnShortcutElement.textContent = 'Ctrl+⏎';
             submitBtn.title = '快捷键: Ctrl+Enter';
         }
     }
