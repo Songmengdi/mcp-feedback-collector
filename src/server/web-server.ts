@@ -112,7 +112,7 @@ export class WebServer {
     // 获取当前文件的目录路径（ES模块兼容）
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const staticPath = path.resolve(__dirname, '../static');
+    const staticPath = path.resolve(__dirname, '..');
 
     // 静态文件服务 - 使用绝对路径
     this.app.use(express.static(staticPath));
@@ -332,6 +332,9 @@ export class WebServer {
 
     try {
       // 验证反馈数据
+      // 需要添加：记录收到的反馈内容
+      logger.info(`收到用户反馈 - 会话: ${feedbackData.sessionId}`);
+      logger.info(`反馈文字内容: ${feedbackData.text?.slice(0, 100) || '无文字内容'}`);
       if (!feedbackData.text && (!feedbackData.images || feedbackData.images.length === 0)) {
         socket.emit('feedback_error', {
           error: '请提供文字反馈或上传图片'
@@ -379,6 +382,10 @@ export class WebServer {
       session.feedback.push(processedFeedback);
       this.sessionStorage.updateSession(feedbackData.sessionId, { feedback: session.feedback });
 
+      // 需要添加：记录处理后的反馈数据和会话状态
+      logger.info(`添加反馈到会话 - 会话ID: ${feedbackData.sessionId}`);
+      logger.info(`当前会话反馈总数: ${session.feedback.length}`);
+
       // 通知提交成功
       socket.emit('feedback_submitted', {
         success: true,
@@ -387,6 +394,8 @@ export class WebServer {
 
       // 完成反馈收集
       if (session.resolve) {
+        // 需要添加：记录反馈收集完成的详细信息
+        logger.info(`反馈收集完成 - 会话: ${feedbackData.sessionId}, 总反馈数: ${session.feedback.length}`);
         session.resolve(session.feedback);
         this.sessionStorage.deleteSession(feedbackData.sessionId);
       }
@@ -419,6 +428,15 @@ export class WebServer {
       };
 
       this.sessionStorage.createSession(sessionId, session);
+
+      // 立即广播工作汇报到所有连接的客户端
+      this.io.emit('work_summary_broadcast', {
+        session_id: sessionId,
+        work_summary: workSummary,
+        timestamp: Date.now()
+      });
+      
+      logger.info(`工作汇报已广播到所有客户端: ${sessionId}`);
 
       // 设置超时
       const timeoutId = setTimeout(() => {
