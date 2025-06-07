@@ -402,7 +402,13 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .phrase-mode-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #cccccc;
         }
 
         .checkbox-label {
@@ -480,6 +486,59 @@
             background: #1e1e1e;
             border-radius: 4px;
             border-left: 3px solid #007acc;
+        }
+
+        /* 模式选择按钮组样式 */
+        .phrase-mode-selector {
+            display: flex;
+            gap: 0;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            padding: 4px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #cccccc;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+        }
+
+        .mode-btn.active {
+            background: #007acc;
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 122, 204, 0.3);
+        }
+
+        .mode-btn.active:hover {
+            background: #005a9e;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .phrase-mode-selector {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .mode-btn {
+                border-radius: 4px;
+            }
         }
 
         /* 按钮组 */
@@ -877,16 +936,28 @@
                                     <!-- 快捷语选项 -->
                                     <div class="quick-phrase-option">
                                         <div class="quick-phrase-header">
-                                            <label class="checkbox-label">
-                                                <input type="checkbox" id="add-quick-phrase" checked>
-                                                <span class="checkbox-custom"></span>
-                                                <span class="checkbox-text">附加快捷语（推荐）</span>
-                                            </label>
+                                            <div class="phrase-mode-title">
+                                                <span>反馈模式</span>
+                                            </div>
                                             <button type="button" class="quick-phrase-custom-btn" onclick="showQuickPhraseEditor()">
-                                                ⚙️ 自定义
+                                                ⚙️ 自定义提示
                                             </button>
                                         </div>
-                                        <div class="quick-phrase-hint">
+                                        
+                                        <!-- 模式选择按钮组 -->
+                                        <div class="phrase-mode-selector" id="phrase-mode-selector">
+                                            <button type="button" class="mode-btn active" data-mode="discuss" onclick="selectPhraseMode('discuss')">
+                                                探讨
+                                            </button>
+                                            <button type="button" class="mode-btn" data-mode="edit" onclick="selectPhraseMode('edit')">
+                                                编辑
+                                            </button>
+                                            <button type="button" class="mode-btn" data-mode="search" onclick="selectPhraseMode('search')">
+                                                搜索
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="quick-phrase-hint" id="phrase-mode-hint">
                                             💡 自动附加MCP反馈收集提示词，提升AI响应质量
                                         </div>
                                     </div>

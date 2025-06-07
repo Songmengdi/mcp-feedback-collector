@@ -15,15 +15,55 @@ let autoRefreshCountdown = 10;  // 改为10秒
 let autoRefreshTimer = null;
 let lastWorkSummary = null;  // 记录上次的工作汇报内容
 
+// 快捷语模式相关变量
+let currentPhraseMode = 'discuss';
 
+// 三种模式的默认快捷语内容（从文件加载）
+let defaultPhrases = {
+    discuss: '',
+    edit: '',
+    search: ''
+};
+
+// 加载默认提示词
+async function loadDefaultPhrases() {
+    try {
+        const modes = ['discuss', 'edit', 'search'];
+        for (const mode of modes) {
+            const response = await fetch(`/prompts/${mode}.txt`);
+            if (response.ok) {
+                defaultPhrases[mode] = await response.text();
+            } else {
+                console.warn(`无法加载 ${mode} 模式的默认提示词`);
+                // 如果文件加载失败，使用备用的默认内容
+                defaultPhrases[mode] = `\n\n---\n请基于以上工作内容提供${mode === 'discuss' ? '深入探讨和分析' : mode === 'edit' ? '具体修改建议' : '相关信息查找'}。`;
+            }
+        }
+        console.log('默认提示词加载完成:', defaultPhrases);
+    } catch (error) {
+        console.error('加载默认提示词失败:', error);
+        // 使用备用的默认内容
+        defaultPhrases = {
+            discuss: '\n\n---\n请基于以上工作内容进行深入探讨和分析，提供建设性的意见和建议。',
+            edit: '\n\n---\n请基于以上工作内容提供具体的修改建议，包括代码优化、功能改进等方面的指导。',
+            search: '\n\n---\n请基于以上工作内容帮助我查找相关信息、解决方案或最佳实践。'
+        };
+    }
+}
 
 // 初始化应用
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     // 获取并显示版本信息
     fetchVersionInfo();
 
     // 设置平台相关的快捷键提示
     setupShortcutHint();
+
+    // 加载默认提示词
+    await loadDefaultPhrases();
+
+    // 初始化快捷语模式
+    selectPhraseMode('discuss');
 
     initializeSocket();
 
@@ -550,23 +590,33 @@ function clearFeedbackForm() {
     updateImagePreviews();
 }
 
-// 默认快捷语内容
-const DEFAULT_QUICK_PHRASE = `
-
----
-- 当你需要询问用户问题时, 应请求用户提供反馈, 并使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
-
-- 每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。
-`
 // 获取自定义快捷语
 function getCustomQuickPhrase() {
-    const customPhrase = localStorage.getItem('mcp-custom-quick-phrase');
-    return customPhrase || DEFAULT_QUICK_PHRASE;
+    const customPhrase = localStorage.getItem(`mcp-custom-quick-phrase-${currentPhraseMode}`);
+    return customPhrase || defaultPhrases[currentPhraseMode];
+}
+
+// 应用快捷语到反馈内容
+function applyQuickPhraseToFeedback(feedbackText) {
+    const quickPhrase = getCustomQuickPhrase();
+    
+    if (!quickPhrase) {
+        return feedbackText;
+    }
+    
+    // 检查提示词中是否包含 {{ feedback }} 占位符
+    if (quickPhrase.includes('{{ feedback }}')) {
+        // 如果包含占位符，替换为用户反馈内容
+        return quickPhrase.replace(/\{\{\s*feedback\s*\}\}/g, feedbackText);
+    } else {
+        // 如果不包含占位符，保持原格式：反馈内容在前，提示词在后，用---分割
+        return feedbackText + '\n\n---\n' + quickPhrase.trim();
+    }
 }
 
 // 保存自定义快捷语
 function saveCustomQuickPhrase(phrase) {
-    localStorage.setItem('mcp-custom-quick-phrase', phrase);
+    localStorage.setItem(`mcp-custom-quick-phrase-${currentPhraseMode}`, phrase);
 }
 
 // 显示快捷语编辑器
@@ -574,8 +624,19 @@ function showQuickPhraseEditor() {
     const modal = document.getElementById('quick-phrase-modal');
     const textarea = document.getElementById('custom-quick-phrase');
     
-    // 加载当前的快捷语内容
+    // 加载当前模式的快捷语内容
     textarea.value = getCustomQuickPhrase();
+    
+    // 更新模态框标题
+    const modalTitle = document.querySelector('#quick-phrase-modal h3');
+    const modeNames = {
+        discuss: '探讨模式',
+        edit: '编辑模式',
+        search: '搜索模式'
+    };
+    if (modalTitle) {
+        modalTitle.textContent = `自定义快捷语 - ${modeNames[currentPhraseMode]}`;
+    }
     
     modal.style.display = 'flex';
     
@@ -603,11 +664,37 @@ function saveQuickPhrase() {
     showStatusMessage('success', '快捷语已保存');
 }
 
-// 恢复默认快捷语
+// 重置快捷语为默认值
 function resetQuickPhrase() {
     const textarea = document.getElementById('custom-quick-phrase');
-    textarea.value = DEFAULT_QUICK_PHRASE;
+    textarea.value = defaultPhrases[currentPhraseMode];
     showStatusMessage('info', '已恢复为默认快捷语');
+}
+
+// 选择快捷语模式
+function selectPhraseMode(mode) {
+    currentPhraseMode = mode;
+    
+    // 更新按钮状态
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const selectedBtn = document.querySelector(`[data-mode="${mode}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
+    
+    // 更新提示文字
+    const hints = {
+        discuss: '💡 探讨模式：自动附加深入分析和建议的提示词',
+        edit: '💡 编辑模式：自动附加代码修改和优化的提示词', 
+        search: '💡 搜索模式：自动附加信息查找和解决方案的提示词'
+    };
+    
+    const hintElement = document.getElementById('phrase-mode-hint');
+    if (hintElement) {
+        hintElement.textContent = hints[mode];
+    }
 }
 
 // 为反馈文本框添加粘贴图片功能
@@ -682,10 +769,9 @@ document.getElementById('feedback-form').addEventListener('submit', function(e) 
 
     let feedbackText = document.getElementById('feedback-text').value.trim();
 
-    // 检查是否需要附加快捷语
-    const addQuickPhrase = document.getElementById('add-quick-phrase').checked;
-    if (addQuickPhrase && feedbackText) {
-        feedbackText += getCustomQuickPhrase();
+    // 自动附加快捷语（反馈模式是必选的）
+    if (feedbackText) {
+        feedbackText = applyQuickPhraseToFeedback(feedbackText);
     }
 
     console.log('提交反馈:', {
@@ -873,8 +959,6 @@ function refreshWorkSummary() {
     }
 }
 
-
-
 /**
  * 开始自动刷新
  */
@@ -935,8 +1019,6 @@ function updateAutoRefreshCountdown() {
         statusText.className = 'refresh-status-text';
     }
 }
-
-
 
 // 获取版本信息
 async function fetchVersionInfo() {
