@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 获取并显示版本信息
     fetchVersionInfo();
 
+    // 设置平台相关的快捷键提示
+    setupShortcutHint();
+
     initializeSocket();
 
     // 检查URL参数
@@ -628,6 +631,47 @@ document.getElementById('feedback-text').addEventListener('paste', function(e) {
                 }
             }
             break;
+        }
+    }
+});
+
+// 设置平台相关的快捷键提示
+function setupShortcutHint() {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const shortcutKeysElement = document.getElementById('shortcut-keys');
+    const submitBtn = document.getElementById('submit-feedback-btn');
+    
+    if (shortcutKeysElement && submitBtn) {
+        if (isMac) {
+            shortcutKeysElement.textContent = 'Cmd+Enter';
+            submitBtn.title = '快捷键: Cmd+Enter';
+        } else {
+            shortcutKeysElement.textContent = 'Ctrl+Enter';
+            submitBtn.title = '快捷键: Ctrl+Enter';
+        }
+    }
+}
+
+// 添加快捷键支持 (Cmd+Enter for Mac, Ctrl+Enter for Windows)
+document.addEventListener('keydown', function(e) {
+    // 检查是否按下了 Cmd+Enter (Mac) 或 Ctrl+Enter (Windows)
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isShortcut = (isMac && e.metaKey && e.key === 'Enter') || 
+                      (!isMac && e.ctrlKey && e.key === 'Enter');
+    
+    if (isShortcut) {
+        // 检查当前焦点是否在反馈表单区域内
+        const activeElement = document.activeElement;
+        const feedbackForm = document.getElementById('feedback-form');
+        const feedbackTextarea = document.getElementById('feedback-text');
+        
+        // 如果焦点在反馈文本框内或表单内，触发提交
+        if (feedbackForm && (feedbackForm.contains(activeElement) || activeElement === feedbackTextarea)) {
+            e.preventDefault();
+            
+            // 触发表单提交事件
+            const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+            feedbackForm.dispatchEvent(submitEvent);
         }
     }
 });

@@ -767,6 +767,30 @@
             font-size: 14px;
         }
 
+        /* 快捷键提示样式 */
+        .shortcut-hint {
+            text-align: center;
+            margin-top: 12px;
+            color: #969696;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .shortcut-hint kbd {
+            background: #2d2d30;
+            border: 1px solid #464647;
+            border-radius: 3px;
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+            color: #cccccc;
+            display: inline-block;
+            font-family: "Consolas", "Monaco", "Courier New", monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            margin: 0 2px;
+            padding: 2px 6px;
+            white-space: nowrap;
+        }
+
         /* 滚动条样式 */
         ::-webkit-scrollbar {
             width: 14px;
@@ -899,6 +923,9 @@
                                     <button type="submit" class="btn btn-primary" id="submit-feedback-btn">
                                         提交反馈
                                     </button>
+                                </div>
+                                <div class="shortcut-hint" id="shortcut-hint">
+                                    💡 快捷键: <kbd id="shortcut-keys"></kbd>
                                 </div>
                             </form>
                         </div>
