@@ -3,7 +3,7 @@
  */
 
 import { config as dotenvConfig } from 'dotenv';
-import { Config, MCPError } from '../types/index.js';
+import { Config, MCPError, TransportMode } from '../types/index.js';
 
 // 加载环境变量
 dotenvConfig();
@@ -65,7 +65,11 @@ export function createDefaultConfig(): Config {
     forcePort: getEnvBoolean('MCP_FORCE_PORT', false),
     killProcessOnPortConflict: getEnvBoolean('MCP_KILL_PORT_PROCESS', false),
     useFixedUrl: getEnvBoolean('MCP_USE_FIXED_URL', true),  // 默认启用固定URL
-    cleanupPortOnStart: getEnvBoolean('MCP_CLEANUP_PORT_ON_START', true)  // 默认启用端口清理
+    cleanupPortOnStart: getEnvBoolean('MCP_CLEANUP_PORT_ON_START', true),  // 默认启用端口清理
+    // MCP传输模式配置
+    transportMode: getEnvVar('MCP_TRANSPORT_MODE', TransportMode.STREAMABLE_HTTP) as TransportMode,
+    mcpPort: getEnvNumber('MCP_HTTP_PORT', 3001),  // MCP HTTP服务器端口
+    enableSSEFallback: getEnvBoolean('MCP_ENABLE_SSE_FALLBACK', true)  // 默认启用SSE向后兼容
   };
 }
 
@@ -78,6 +82,22 @@ export function validateConfig(config: Config): void {
     throw new MCPError(
       `Invalid port number: ${config.webPort}. Must be between 1024 and 65535.`,
       'INVALID_PORT'
+    );
+  }
+
+  // 验证MCP HTTP端口范围
+  if (config.mcpPort && (config.mcpPort < 1024 || config.mcpPort > 65535)) {
+    throw new MCPError(
+      `Invalid MCP port number: ${config.mcpPort}. Must be between 1024 and 65535.`,
+      'INVALID_MCP_PORT'
+    );
+  }
+
+  // 验证端口冲突
+  if (config.mcpPort && config.mcpPort === config.webPort) {
+    throw new MCPError(
+      `MCP port (${config.mcpPort}) cannot be the same as web port (${config.webPort}).`,
+      'PORT_CONFLICT'
     );
   }
 
@@ -97,7 +117,13 @@ export function validateConfig(config: Config): void {
     );
   }
 
-
+  // 验证传输模式
+  if (config.transportMode && !Object.values(TransportMode).includes(config.transportMode)) {
+    throw new MCPError(
+      `Invalid transport mode: ${config.transportMode}. Must be one of: ${Object.values(TransportMode).join(', ')}`,
+      'INVALID_TRANSPORT_MODE'
+    );
+  }
 
   // 验证日志级别
   const validLogLevels = ['error', 'warn', 'info', 'debug'];
@@ -134,4 +160,7 @@ export function displayConfig(config: Config): void {
   console.log(`  Kill Port Process: ${config.killProcessOnPortConflict ? 'enabled' : 'disabled'}`);
   console.log(`  Use Fixed URL: ${config.useFixedUrl ? 'enabled' : 'disabled'}`);
   console.log(`  Cleanup Port On Start: ${config.cleanupPortOnStart ? 'enabled' : 'disabled'}`);
+  console.log(`  Transport Mode: ${config.transportMode || TransportMode.STREAMABLE_HTTP}`);
+  console.log(`  MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
+  console.log(`  SSE Fallback: ${config.enableSSEFallback ? 'enabled' : 'disabled'}`);
 }

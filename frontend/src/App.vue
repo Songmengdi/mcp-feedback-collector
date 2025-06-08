@@ -337,10 +337,6 @@ body {
   min-height: 600px;
 }
 
-.left-column {
-  /* 移除gap，因为Tab组件内部管理间距 */
-}
-
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .two-column-layout {

@@ -17,6 +17,10 @@ export interface Config {
   killProcessOnPortConflict?: boolean | undefined;  // 自动终止占用进程
   useFixedUrl?: boolean | undefined;         // 使用固定URL，不带会话参数
   cleanupPortOnStart?: boolean | undefined;  // 启动时清理端口
+  // 新增：MCP传输模式配置
+  transportMode?: TransportMode | undefined;  // MCP传输模式
+  mcpPort?: number | undefined;              // MCP HTTP服务器端口
+  enableSSEFallback?: boolean | undefined;   // 启用SSE向后兼容
 }
 
 // 反馈数据类型
@@ -137,4 +141,11 @@ export interface APIConfig {
   model: string;
   temperature?: number;
   maxTokens?: number;
+}
+
+// MCP传输模式枚举
+export enum TransportMode {
+  STDIO = 'stdio',                    // 标准输入输出
+  STREAMABLE_HTTP = 'streamable_http', // StreamableHTTP（默认，推荐）
+  SSE = 'sse'                         // Server-Sent Events（向后兼容）
 }

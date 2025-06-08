@@ -15,10 +15,11 @@ import { logger } from './utils/logger.js';
 const VERSION = '2.0.8';
 
 // 在最开始检测MCP模式并设置日志级别
-// 改进的MCP模式检测：检查多个条件
-const isMCPMode = !process.stdin.isTTY ||
-                  process.env['NODE_ENV'] === 'mcp' ||
-                  process.argv.includes('--mcp-mode');
+// 改进的MCP模式检测：支持所有传输模式
+const isMCPMode = (process.env['NODE_ENV'] === 'mcp' ||
+                  process.argv.includes('--mcp-mode') ||
+                  (process.env['MCP_TRANSPORT_MODE'] && !process.stdin.isTTY)) &&
+                  !process.env['FORCE_INTERACTIVE'];
 
 if (isMCPMode) {
   logger.disableColors();
@@ -50,6 +51,9 @@ async function startMCPServer(options: {
       // 交互模式：显示欢迎信息和设置日志级别
       showWelcome();
       logger.setLevel(config.logLevel as any);
+      logger.debug(`启动模式: 交互模式 (TTY: ${process.stdin.isTTY})`);
+    } else {
+      logger.debug(`启动模式: MCP模式 (TTY: ${process.stdin.isTTY})`);
     }
 
     // 应用命令行参数
