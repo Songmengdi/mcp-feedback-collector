@@ -21,6 +21,18 @@ export const useAppStore = defineStore('app', () => {
   const autoRefreshTimer = ref<number | null>(null)
   const lastWorkSummary = ref<string | null>(null)
   
+  // 接收到的prompt状态
+  const receivedPrompt = ref<{
+    sessionId: string;
+    prompt: string;
+    model?: string;
+    files?: any[];
+    images?: any[];
+    mode?: string;
+    metadata?: any;
+    timestamp: number;
+  } | null>(null)
+  
   // 切换标签页
   const setCurrentTab = (tab: string) => {
     currentTab.value = tab
@@ -46,6 +58,16 @@ export const useAppStore = defineStore('app', () => {
     lastWorkSummary.value = summary
   }
   
+  // 设置接收到的prompt
+  const setReceivedPrompt = (prompt: typeof receivedPrompt.value) => {
+    receivedPrompt.value = prompt
+  }
+  
+  // 清除接收到的prompt
+  const clearReceivedPrompt = () => {
+    receivedPrompt.value = null
+  }
+  
   return {
     // 状态
     currentTab,
@@ -55,12 +77,15 @@ export const useAppStore = defineStore('app', () => {
     autoRefreshCountdown,
     autoRefreshTimer,
     lastWorkSummary,
+    receivedPrompt,
     
     // 方法
     setCurrentTab,
     setCurrentPhraseMode,
     setDefaultPhrases,
     setAutoRefreshCountdown,
-    setLastWorkSummary
+    setLastWorkSummary,
+    setReceivedPrompt,
+    clearReceivedPrompt
   }
 })

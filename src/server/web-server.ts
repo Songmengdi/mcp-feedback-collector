@@ -11,6 +11,7 @@ import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { VERSION } from '../index.js';
+
 import { Config, FeedbackData, MCPError } from '../types/index.js';
 import { ImageProcessor } from '../utils/image-processor.js';
 import { logger } from '../utils/logger.js';
@@ -31,6 +32,7 @@ export class WebServer {
   private portManager: PortManager;
   private imageProcessor: ImageProcessor;
   private sessionStorage: SessionStorage;
+
 
   constructor(config: Config) {
     this.config = config;
@@ -187,6 +189,95 @@ export class WebServer {
     this.app.get('/api/performance-report', (req, res) => {
       const report = performanceMonitor.getFormattedReport();
       res.type('text/plain').send(report);
+    });
+
+    // Toolbar 专用路由
+    // Ping端点 - 标识为反馈收集服务
+    this.app.get('/ping/stagewise', (req, res) => {
+      logger.info('Ping request received (feedback collector)');
+      res.send('mcp-feedback-collector');
+    });
+
+    // 接收来自Toolbar的prompt
+    this.app.post('/api/receive-prompt', (req, res) => {
+      try {
+        const { prompt, sessionId, model, files, images, mode, metadata } = req.body;
+        
+        if (!prompt) {
+          res.status(400).json({ error: 'Prompt is required' });
+          return;
+        }
+
+        logger.info(`[WebServer] 接收到来自Toolbar的prompt: ${prompt.substring(0, 100)}...`);
+        logger.info(`[WebServer] 会话ID: ${sessionId}, 来源: ${metadata?.source || 'unknown'}`);
+
+        // 暂存prompt到SessionStorage
+        this.sessionStorage.storePrompt(sessionId, {
+          prompt,
+          model,
+          files,
+          images,
+          mode,
+          metadata,
+          timestamp: Date.now()
+        });
+
+        // 通过Socket.IO广播prompt到所有连接的客户端
+        this.io.emit('prompt_received', {
+          sessionId,
+          prompt,
+          model,
+          files,
+          images,
+          mode,
+          metadata,
+          timestamp: Date.now()
+        });
+
+        logger.info(`[WebServer] Prompt已暂存并广播到前端客户端`);
+
+        res.json({
+          success: true,
+          message: 'Prompt received and broadcasted',
+          sessionId,
+          timestamp: Date.now()
+        });
+
+      } catch (error) {
+        logger.error('[WebServer] 处理prompt失败:', error);
+        res.status(500).json({
+          error: 'Failed to process prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 获取暂存的prompt
+    this.app.get('/api/get-prompt/:sessionId', (req, res) => {
+      try {
+        const { sessionId } = req.params;
+        const promptData = this.sessionStorage.getPrompt(sessionId);
+
+        if (promptData) {
+          logger.info(`[WebServer] 返回暂存的prompt: ${sessionId}`);
+          res.json({
+            success: true,
+            data: promptData
+          });
+        } else {
+          res.json({
+            success: false,
+            message: 'No prompt found for this session'
+          });
+        }
+
+      } catch (error) {
+        logger.error('[WebServer] 获取prompt失败:', error);
+        res.status(500).json({
+          error: 'Failed to get prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
 
     // 错误处理中间件
@@ -677,4 +768,6 @@ export class WebServer {
   getPort(): number {
     return this.port;
   }
+
+
 }

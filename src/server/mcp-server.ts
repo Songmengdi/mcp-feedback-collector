@@ -4,10 +4,11 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolResult, TextContent, ImageContent } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult, ImageContent, TextContent } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { Config, CollectFeedbackParams, MCPError, FeedbackData, ImageData } from '../types/index.js';
+import { CollectFeedbackParams, Config, FeedbackData, ImageData, MCPError } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { ToolbarServer } from './toolbar-server.js';
 import { WebServer } from './web-server.js';
 
 /**
@@ -16,6 +17,7 @@ import { WebServer } from './web-server.js';
 export class MCPServer {
   private mcpServer: McpServer;
   private webServer: WebServer;
+  private toolbarServer: ToolbarServer;
   private config: Config;
   private isRunning = false;
 
@@ -39,6 +41,9 @@ export class MCPServer {
 
     // 创建Web服务器实例
     this.webServer = new WebServer(config);
+
+    // 创建Toolbar服务器实例
+    this.toolbarServer = new ToolbarServer();
 
     // 注册MCP工具函数
     this.registerTools();
@@ -145,24 +150,14 @@ export class MCPServer {
 
     const content: (TextContent | ImageContent)[] = [];
 
-    // 添加总结文本
-    content.push({
-      type: 'text',
-      text: `收到 ${feedback.length} 条用户反馈：\n`
-    });
 
     feedback.forEach((item, index) => {
-      // 添加反馈标题
-      content.push({
-        type: 'text',
-        text: `\n--- 反馈 ${index + 1} ---`
-      });
 
       // 添加文字反馈
       if (item.text) {
         content.push({
           type: 'text',
-          text: `文字反馈: ${item.text}`
+          text: `${item.text}`
         });
       }
 
@@ -248,8 +243,11 @@ export class MCPServer {
     try {
       logger.info('正在启动MCP服务器...');
       
-      // 启动Web服务器
-      await this.webServer.start();
+      // 并行启动Web服务器和Toolbar服务器
+      await Promise.all([
+        this.webServer.start(),
+        this.toolbarServer.start()
+      ]);
       
       // 连接MCP传输
       const transport = new StdioServerTransport();
@@ -301,8 +299,11 @@ export class MCPServer {
     try {
       logger.info('正在启动Web模式...');
       
-      // 仅启动Web服务器
-      await this.webServer.start();
+      // 启动Web服务器和Toolbar服务器
+      await Promise.all([
+        this.webServer.start(),
+        this.toolbarServer.start()
+      ]);
       
       this.isRunning = true;
       logger.info('✅ Web服务器启动成功');
@@ -331,8 +332,11 @@ export class MCPServer {
     try {
       logger.info('正在停止服务器...');
       
-      // 停止Web服务器
-      await this.webServer.stop();
+      // 并行停止Web服务器和Toolbar服务器
+      await Promise.all([
+        this.webServer.stop(),
+        this.toolbarServer.stop()
+      ]);
       
       // 关闭MCP服务器
       if (this.mcpServer) {
@@ -355,10 +359,17 @@ export class MCPServer {
   /**
    * 获取服务器状态
    */
-  getStatus(): { running: boolean; webPort?: number | undefined } {
+  getStatus(): { 
+    running: boolean; 
+    webPort?: number | undefined;
+    toolbarPort?: number | undefined;
+    toolbarStatus?: any;
+  } {
     return {
       running: this.isRunning,
-      webPort: this.webServer.isRunning() ? this.webServer.getPort() : undefined
+      webPort: this.webServer.isRunning() ? this.webServer.getPort() : undefined,
+      toolbarPort: this.toolbarServer.isRunning() ? this.toolbarServer.getPort() : undefined,
+      toolbarStatus: this.toolbarServer.getToolbarStatus()
     };
   }
 }

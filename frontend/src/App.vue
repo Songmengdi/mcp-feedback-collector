@@ -31,9 +31,9 @@
 
         <!-- 两栏布局 -->
         <div class="two-column-layout">
-          <!-- 左栏：AI工作汇报 -->
+          <!-- 左栏：Tab界面 -->
           <div class="left-column">
-            <WorkSummary />
+            <LeftPanelTabs />
           </div>
 
           <!-- 右栏：用户反馈 -->
@@ -55,8 +55,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, provide, ref } from 'vue'
 import FeedbackForm from './components/FeedbackForm.vue'
+import LeftPanelTabs from './components/LeftPanelTabs.vue'
 import StatusMessage from './components/StatusMessage.vue'
-import WorkSummary from './components/WorkSummary.vue'
 import socketService from './services/socket'
 import { useAppStore } from './stores/app'
 import { useConnectionStore } from './stores/connection'
@@ -164,6 +164,16 @@ const handlePageClose = () => {
   }
 }
 
+// 处理prompt通知事件
+const handlePromptNotification = (event: Event) => {
+  const customEvent = event as CustomEvent
+  const { prompt, sessionId, source, timestamp } = customEvent.detail
+  
+  showStatusMessage('info', `收到来自${source}的prompt`, true)
+  
+  console.log('收到prompt通知:', { prompt, sessionId, source, timestamp })
+}
+
 // 提供全局状态消息方法
 provide('showStatusMessage', showStatusMessage)
 
@@ -185,6 +195,9 @@ onMounted(async () => {
   window.addEventListener('updateFeedbackCountdown', handleCountdownUpdate)
   window.addEventListener('closeFeedbackPage', handlePageClose)
   
+  // 添加prompt通知事件监听器
+  window.addEventListener('showPromptNotification', handlePromptNotification)
+  
   console.log('Vue应用初始化完成')
 })
 
@@ -193,6 +206,7 @@ onUnmounted(() => {
   window.removeEventListener('showFeedbackSuccess', handleFeedbackSuccess)
   window.removeEventListener('updateFeedbackCountdown', handleCountdownUpdate)
   window.removeEventListener('closeFeedbackPage', handlePageClose)
+  window.removeEventListener('showPromptNotification', handlePromptNotification)
 })
 </script>
 
@@ -307,6 +321,9 @@ body {
   flex: 1;
   align-items: stretch;
   overflow: hidden;
+  min-height: 0;
+  /* 确保两栏高度一致 */
+  height: 100%;
 }
 
 .left-column,
@@ -315,6 +332,13 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  /* 设置最小高度确保两栏高度一致 */
+  min-height: 600px;
+}
+
+.left-column {
+  /* 移除gap，因为Tab组件内部管理间距 */
 }
 
 /* 响应式设计 */

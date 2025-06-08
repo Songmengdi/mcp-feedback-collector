@@ -135,6 +135,36 @@ class SocketService {
         console.log('获取最新汇报失败:', data.message)
       }
     })
+
+    // 接收来自Toolbar的prompt
+    this.socket.on('prompt_received', (data: any) => {
+      console.log('收到来自Toolbar的prompt:', data)
+      
+      if (data.prompt) {
+        // 显示prompt通知
+        this.showPromptNotification(data)
+        
+        // 将prompt存储到应用状态中
+        this.appStore.setReceivedPrompt({
+          sessionId: data.sessionId,
+          prompt: data.prompt,
+          model: data.model,
+          files: data.files,
+          images: data.images,
+          mode: data.mode,
+          metadata: data.metadata,
+          timestamp: data.timestamp || Date.now()
+        })
+        
+        // 如果有会话ID，更新当前会话
+        if (data.sessionId) {
+          this.feedbackStore.setCurrentFeedbackSession(data.sessionId)
+        }
+        
+        // 切换到prompt显示标签页（如果存在）
+        this.appStore.setCurrentTab('prompt')
+      }
+    })
   }
 
   // 发送事件
@@ -177,6 +207,20 @@ class SocketService {
   // 获取Socket实例
   public getSocket(): Socket | null {
     return this.socket
+  }
+
+  // 显示prompt接收通知
+  private showPromptNotification(data: any): void {
+    // 通过事件系统通知主应用显示prompt通知
+    const event = new CustomEvent('showPromptNotification', {
+      detail: {
+        prompt: data.prompt,
+        sessionId: data.sessionId,
+        source: data.metadata?.source || 'toolbar',
+        timestamp: data.timestamp
+      }
+    })
+    window.dispatchEvent(event)
   }
 
   // 显示反馈提交成功消息并开始倒计时关闭页面

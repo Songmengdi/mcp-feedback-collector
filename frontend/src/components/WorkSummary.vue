@@ -84,9 +84,10 @@ const showStatusMessage = (type: string, message: string) => {
   border: 1px solid #3e3e42;
   border-radius: 6px;
   padding: 20px;
-  height: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .card-header {

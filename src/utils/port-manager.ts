@@ -14,6 +14,10 @@ export class PortManager {
   private readonly PORT_RANGE_START = 5000;
   private readonly PORT_RANGE_END = 5019;
   private readonly MAX_RETRIES = 20;
+  
+  // Toolbar 专用端口范围
+  private readonly TOOLBAR_PORT_RANGE_START = 5746;
+  private readonly TOOLBAR_PORT_RANGE_END = 5756;
 
   /**
    * 检查端口是否可用（增强版本）
@@ -304,5 +308,104 @@ export class PortManager {
         error
       );
     }
+  }
+
+  /**
+   * 查找 Toolbar 可用端口
+   */
+  async findToolbarPort(preferredPort?: number): Promise<number> {
+    // 如果指定了首选端口，先尝试该端口
+    if (preferredPort) {
+      logger.info(`[Toolbar] 检查首选端口: ${preferredPort}`);
+      const available = await this.isPortAvailable(preferredPort);
+      if (available) {
+        logger.info(`[Toolbar] ✅ 使用首选端口: ${preferredPort}`);
+        return preferredPort;
+      } else {
+        logger.warn(`[Toolbar] ❌ 首选端口 ${preferredPort} 不可用，寻找其他端口...`);
+      }
+    }
+
+    // 在 Toolbar 端口范围内查找可用端口
+    for (let port = this.TOOLBAR_PORT_RANGE_START; port <= this.TOOLBAR_PORT_RANGE_END; port++) {
+      logger.debug(`[Toolbar] 检查端口: ${port}`);
+      if (await this.isPortAvailable(port)) {
+        logger.info(`[Toolbar] ✅ 找到可用端口: ${port}`);
+        return port;
+      }
+    }
+
+    // 如果 Toolbar 范围内没有可用端口，使用通用方法
+    logger.warn('[Toolbar] ⚠️ 专用端口范围内无可用端口，使用通用端口范围');
+    const fallbackPort = await this.findAvailablePort();
+    logger.info(`[Toolbar] 🔄 使用备用端口: ${fallbackPort}`);
+    return fallbackPort;
+  }
+
+  /**
+   * 获取 Toolbar 端口范围状态
+   */
+  async getToolbarPortRangeStatus(): Promise<PortInfo[]> {
+    const results: PortInfo[] = [];
+    
+    for (let port = this.TOOLBAR_PORT_RANGE_START; port <= this.TOOLBAR_PORT_RANGE_END; port++) {
+      const info = await this.getPortInfo(port);
+      results.push(info);
+    }
+    
+    return results;
+  }
+
+  /**
+   * 检测 Toolbar 服务
+   * 通过 ping 端点检测是否有 Toolbar 兼容的服务运行
+   */
+  async detectToolbarServices(): Promise<Array<{ port: number; service: string; status: string }>> {
+    const services: Array<{ port: number; service: string; status: string }> = [];
+    
+    for (let port = this.TOOLBAR_PORT_RANGE_START; port <= this.TOOLBAR_PORT_RANGE_END; port++) {
+      try {
+        // 检查端口是否被占用
+        const available = await this.isPortAvailable(port);
+        if (available) {
+          continue; // 端口未被占用，跳过
+        }
+
+        // 尝试访问 ping 端点
+        const response = await fetch(`http://localhost:${port}/ping/stagewise`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(1000) // 1秒超时
+        });
+
+        if (response.ok) {
+          const text = await response.text();
+          services.push({
+            port,
+            service: text.trim() || 'unknown',
+            status: 'active'
+          });
+        }
+      } catch (error) {
+        // 端口被占用但不是 Toolbar 服务
+        services.push({
+          port,
+          service: 'unknown',
+          status: 'occupied'
+        });
+      }
+    }
+    
+    return services;
+  }
+
+  /**
+   * 获取 Toolbar 端口配置
+   */
+  getToolbarPortConfig() {
+    return {
+      rangeStart: this.TOOLBAR_PORT_RANGE_START,
+      rangeEnd: this.TOOLBAR_PORT_RANGE_END,
+      defaultPort: this.TOOLBAR_PORT_RANGE_START
+    };
   }
 }

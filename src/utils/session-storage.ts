@@ -3,8 +3,8 @@
  * 提供内存存储和可选的持久化存储
  */
 
+import { FeedbackData, MCPError } from '../types/index.js';
 import { logger } from './logger.js';
-import { MCPError, FeedbackData } from '../types/index.js';
 
 export interface SessionData {
   workSummary: string;
@@ -15,8 +15,19 @@ export interface SessionData {
   reject?: (error: Error) => void;
 }
 
+export interface PromptData {
+  prompt: string;
+  model?: string;
+  files?: any[];
+  images?: any[];
+  mode?: string;
+  metadata?: any;
+  timestamp: number;
+}
+
 export class SessionStorage {
   private sessions = new Map<string, SessionData>();
+  private prompts = new Map<string, PromptData>();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(private cleanupIntervalMs: number = 60000) { // 1分钟清理一次
@@ -130,6 +141,7 @@ export class SessionStorage {
   private startCleanupTimer(): void {
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSessions();
+      this.cleanupExpiredPrompts();
     }, this.cleanupIntervalMs);
   }
 
@@ -184,5 +196,78 @@ export class SessionStorage {
       activeSessions,
       expiredSessions
     };
+  }
+
+  /**
+   * 存储prompt数据
+   */
+  storePrompt(sessionId: string, promptData: PromptData): void {
+    this.prompts.set(sessionId, promptData);
+    logger.debug(`Prompt已存储: ${sessionId}`);
+  }
+
+  /**
+   * 获取prompt数据
+   */
+  getPrompt(sessionId: string): PromptData | undefined {
+    const promptData = this.prompts.get(sessionId);
+    
+    if (promptData) {
+      // 检查prompt是否过期（24小时）
+      const now = Date.now();
+      const elapsed = now - promptData.timestamp;
+      const maxAge = 24 * 60 * 60 * 1000; // 24小时
+      
+      if (elapsed > maxAge) {
+        logger.debug(`Prompt已过期: ${sessionId}`);
+        this.prompts.delete(sessionId);
+        return undefined;
+      }
+    }
+    
+    return promptData;
+  }
+
+  /**
+   * 删除prompt数据
+   */
+  deletePrompt(sessionId: string): boolean {
+    const deleted = this.prompts.delete(sessionId);
+    if (deleted) {
+      logger.debug(`Prompt已删除: ${sessionId}`);
+    }
+    return deleted;
+  }
+
+  /**
+   * 获取所有prompt数据
+   */
+  getAllPrompts(): Map<string, PromptData> {
+    return new Map(this.prompts);
+  }
+
+  /**
+   * 清理过期的prompt数据
+   */
+  cleanupExpiredPrompts(): number {
+    const now = Date.now();
+    const maxAge = 24 * 60 * 60 * 1000; // 24小时
+    let cleanedCount = 0;
+
+    for (const [sessionId, promptData] of this.prompts) {
+      const elapsed = now - promptData.timestamp;
+      
+      if (elapsed > maxAge) {
+        this.prompts.delete(sessionId);
+        cleanedCount++;
+        logger.debug(`清理过期prompt: ${sessionId}`);
+      }
+    }
+
+    if (cleanedCount > 0) {
+      logger.info(`清理了 ${cleanedCount} 个过期prompt`);
+    }
+
+    return cleanedCount;
   }
 }
