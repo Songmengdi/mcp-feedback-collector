@@ -489,8 +489,34 @@ export class WebServer {
 
     try {
       const open = await import('open');
-      await open.default(url);
-      logger.info('浏览器已打开反馈页面');
+      // 获取平台信息
+      const platform = process.platform;
+      logger.debug(`当前平台: ${platform}`);
+      
+      // 在Linux上使用更多选项
+      if (platform === 'linux') {
+        logger.debug('检测到Linux平台，使用额外选项');
+        try {
+          // 尝试使用额外的选项打开
+          await open.default(url, {
+            wait: false,
+            app: {
+              name: open.apps.browser,
+              arguments: ['--new-window']
+            }
+          });
+          logger.info('浏览器已打开反馈页面 (使用browser选项)');
+        } catch (linuxError) {
+          logger.warn('使用browser选项打开浏览器失败，尝试默认方式:', linuxError);
+          // 回退到默认方式
+          await open.default(url);
+          logger.info('浏览器已打开反馈页面 (默认方式)');
+        }
+      } else {
+        // 其他平台使用默认方式
+        await open.default(url);
+        logger.info('浏览器已打开反馈页面');
+      }
     } catch (error) {
       logger.warn('无法自动打开浏览器:', error);
       logger.info(`请手动打开浏览器访问: ${url}`);
