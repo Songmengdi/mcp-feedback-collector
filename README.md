@@ -48,8 +48,8 @@
 git clone <repository-url>
 cd mcp-feedback-collector
 
-# 安装依赖
-npm install
+# 安装依赖(不要npm install)
+npm run install-deps
 
 # 构建项目
 npm run build
@@ -59,15 +59,15 @@ npm run build
 ```bash
 # 启动服务器（后台运行）
 ./start.sh                    # Linux/macOS
-start.bat                     # Windows
+## win 在项目目录下运行 
+node dist/cli.js 
+## 如何后台运行,自己想办法吧(没有win电脑,测不了)
 
 # 查看服务状态
 ./start.sh status             # Linux/macOS
-start.bat status              # Windows
 
 # 停止服务器
 ./start.sh stop               # Linux/macOS
-start.bat stop                # Windows
 ```
 
 ## 🔧 Cursor集成配置

@@ -31,6 +31,7 @@
     "url": "https://github.com/sanshao85/mcp-feedback-collector-web/issues"
   },
   "scripts": {
+    "install-deps": "cd frontend && npm install && cd .. && npm install",
     "build": "npm run build:frontend && tsc",
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "tsc",
