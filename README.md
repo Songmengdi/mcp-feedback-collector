@@ -55,7 +55,7 @@ npm run install-deps
 npm run build
 ```
 
-### 启动服务
+### 启动服务(mcp模式需要自己启动, 配置方式二的不需要启动)
 ```bash
 # 启动服务器（后台运行）
 ./start.sh                    # Linux/macOS
@@ -72,7 +72,7 @@ node dist/cli.js
 
 ## 🔧 Cursor集成配置
 
-### 方式一：HTTP传输模式（推荐）
+### 方式一：HTTP传输模式（不推荐,可能有问题）
 
 在Cursor的MCP设置中添加以下配置：
 
@@ -92,7 +92,7 @@ node dist/cli.js
 3. 将上述配置添加到Cursor的MCP设置
 4. 重启Cursor，确认MCP服务器状态为绿色
 
-### 方式二：命令行模式（兼容）
+### 方式二：命令行模式（推荐,较稳定）
 
 ```json
 {
