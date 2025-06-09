@@ -255,7 +255,7 @@ tail -f logs/mcp-feedback-collector.log
 
 2. **更新Cursor配置**：
    - 推荐使用HTTP传输模式
-   - 更新MCP服务器URL为 `http://localhost:3001/sse`
+   - 更新MCP服务器URL为 `http://localhost:3001/mcp`
 
 3. **新增功能**：
    - `MCP_TRANSPORT_MODE` 默认值改为 `streamable_http`
