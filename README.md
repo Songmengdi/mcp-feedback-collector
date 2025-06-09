@@ -80,7 +80,7 @@ start.bat stop                # Windows
 {
   "mcpServers": {
     "mcp-feedback-collector": {
-      "url": "http://localhost:3001/sse"
+      "url": "http://localhost:3001/mcp"
     }
   }
 }
@@ -196,7 +196,7 @@ start.bat [命令] [选项]
 
 - **Web管理界面**: http://localhost:5000
 - **MCP HTTP API**: http://localhost:3001/mcp
-- **SSE端点**: http://localhost:3001/sse
+- **SSE端点**: http://localhost:3001/mcp
 - **Stagewise拦截服务**: http://localhost:5749 (用于拦截stagewise插件的prompt)
 
 ## 🐛 故障排除
