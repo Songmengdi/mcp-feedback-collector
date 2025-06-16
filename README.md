@@ -21,7 +21,8 @@
 ```
 
 # Cursor mcp模式配置(多窗口不冲突)
-使用 npx smd-mcp-feedback-collector@latest 全局启动(在控制台启动一个,之后在cursor中配置)
+<!-- beta 非稳定版本,介意勿用 -->
+使用 npx smd-mcp-feedback-collector@beta 全局启动(在控制台启动一个,之后在cursor中配置)
 
 ```json
 {
