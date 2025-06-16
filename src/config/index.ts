@@ -57,7 +57,7 @@ export function createDefaultConfig(): Config {
     dialogTimeout: getEnvNumber('MCP_DIALOG_TIMEOUT', 60000),
     corsOrigin: getEnvVar('MCP_CORS_ORIGIN', '*'),
     maxFileSize: getEnvNumber('MCP_MAX_FILE_SIZE', 10485760), // 10MB
-    logLevel: getEnvVar('LOG_LEVEL', 'info'),
+    logLevel: getEnvVar('LOG_LEVEL', 'debug'),
     // 服务器主机配置
     serverHost: getOptionalEnvVar('MCP_SERVER_HOST'),
     serverBaseUrl: getOptionalEnvVar('MCP_SERVER_BASE_URL'),
@@ -68,8 +68,7 @@ export function createDefaultConfig(): Config {
     cleanupPortOnStart: getEnvBoolean('MCP_CLEANUP_PORT_ON_START', true),  // 默认启用端口清理
     // MCP传输模式配置
     transportMode: getEnvVar('MCP_TRANSPORT_MODE', TransportMode.STREAMABLE_HTTP) as TransportMode,
-    mcpPort: getEnvNumber('MCP_HTTP_PORT', 3001),  // MCP HTTP服务器端口
-    enableSSEFallback: getEnvBoolean('MCP_ENABLE_SSE_FALLBACK', true)  // 默认启用SSE向后兼容
+    mcpPort: getEnvNumber('MCP_HTTP_PORT', 3001)  // MCP HTTP服务器端口
   };
 }
 
@@ -162,5 +161,4 @@ export function displayConfig(config: Config): void {
   console.log(`  Cleanup Port On Start: ${config.cleanupPortOnStart ? 'enabled' : 'disabled'}`);
   console.log(`  Transport Mode: ${config.transportMode || TransportMode.STREAMABLE_HTTP}`);
   console.log(`  MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
-  console.log(`  SSE Fallback: ${config.enableSSEFallback ? 'enabled' : 'disabled'}`);
 }

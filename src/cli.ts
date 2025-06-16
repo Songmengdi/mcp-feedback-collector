@@ -42,6 +42,7 @@ async function startMCPServer(options: {
   web?: boolean;
   config?: string;
   debug?: boolean;
+  persistent?: boolean;
 }): Promise<void> {
   try {
     // 加载配置
@@ -90,6 +91,16 @@ async function startMCPServer(options: {
       await server.start();
     }
     
+    // 根据模式决定是否保持进程运行
+    if (options.persistent || options.web) {
+      logger.info('🔄 持久运行模式已启用，服务器将保持运行直到手动停止');
+      
+      // 保持进程运行
+      process.stdin.resume();
+    } else {
+      logger.info('🚀 服务器启动完成，使用 --persistent 选项可保持运行');
+    }
+    
     // 处理优雅关闭
     process.on('SIGINT', async () => {
       logger.info('收到SIGINT信号，正在关闭服务器...');
@@ -129,10 +140,6 @@ async function healthCheck(): Promise<void> {
     console.log(`🌐 Web端口: ${config.webPort}`);
     console.log(`⏱️  超时时间: ${config.dialogTimeout}秒`);
     
-    // TODO: 添加更多健康检查项
-    // - 端口可用性检查
-    // - API连接测试
-    // - 依赖项检查
     
   } catch (error) {
     if (error instanceof MCPError) {
@@ -159,6 +166,7 @@ program
   .option('-c, --config <path>', '指定配置文件路径')
   .option('-d, --debug', '启用调试模式（显示详细的MCP通信日志）')
   .option('--mcp-mode', '强制启用MCP模式（用于调试）')
+  .option('--persistent', '持久运行模式，不自动退出')
   .action(startMCPServer);
 
 // 健康检查命令
@@ -305,6 +313,5 @@ program
       process.exit(1);
     }
   });
-
 // 解析命令行参数
 program.parse();

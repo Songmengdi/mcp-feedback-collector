@@ -13,18 +13,33 @@ class SocketService {
   public initializeSocket(): void {
     console.log('初始化Socket.IO连接...')
     
+    // 解析URL参数获取mcpSessionId
+    const urlParams = new URLSearchParams(window.location.search)
+    const mcpSessionId = urlParams.get('mcpSessionId')
+    
+    console.log('从URL获取mcpSessionId:', mcpSessionId)
+    
     // 在Vue应用启动后初始化stores
     this.connectionStore = useConnectionStore()
     this.feedbackStore = useFeedbackStore()
     this.appStore = useAppStore()
 
-    this.socket = io({
+    // 创建Socket连接配置
+    const socketConfig: any = {
       transports: ['websocket', 'polling'],
       timeout: 5000,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000
-    })
+    }
+    
+    // 如果有mcpSessionId，添加到query参数中
+    if (mcpSessionId) {
+      socketConfig.query = { mcpSessionId }
+      console.log('Socket连接将携带mcpSessionId:', mcpSessionId)
+    }
+
+    this.socket = io(socketConfig)
 
     this.setupEventListeners()
     this.connectionStore.setSocket(this.socket)

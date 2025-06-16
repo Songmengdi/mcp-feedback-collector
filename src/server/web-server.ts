@@ -32,6 +32,7 @@ export class WebServer {
   private portManager: PortManager;
   private imageProcessor: ImageProcessor;
   private sessionStorage: SessionStorage;
+  private socketMcpMapping = new Map<string, string>(); // socketId -> mcpSessionId
 
 
   constructor(config: Config) {
@@ -191,6 +192,56 @@ export class WebServer {
       res.type('text/plain').send(report);
     });
 
+    // 会话状态监控路由（调试用）
+    this.app.get('/api/session-debug', (req, res) => {
+      const sessionMappings = this.getSessionMappingStats();
+      const socketConnections = Array.from(this.io.sockets.sockets.keys());
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        socketMcpMappings: sessionMappings.socketMcpMappings,
+        sessionStorageStats: sessionMappings.sessionStorageStats,
+        activeSocketConnections: socketConnections,
+        totalSockets: socketConnections.length,
+        totalMappings: sessionMappings.socketMcpMappings.length
+      });
+    });
+
+    // 会话匹配状态监控路由
+    this.app.get('/api/session-matching-debug', (req, res) => {
+      const socketMappings = Array.from(this.socketMcpMapping.entries());
+      const activeSessions = this.sessionStorage.getAllSessions();
+      
+      const matchingStatus = socketMappings.map(([socketId, mcpSessionId]) => {
+        const matchingSession = this.findSessionByMcpId(mcpSessionId);
+        return {
+          socketId,
+          mcpSessionId,
+          hasMatchingSession: !!matchingSession,
+          matchingSessionId: matchingSession?.sessionId || null,
+          sessionStartTime: matchingSession?.session.startTime || null
+        };
+      });
+      
+      const sessionList = Array.from(activeSessions.entries()).map(([sessionId, session]) => ({
+        sessionId,
+        mcpSessionId: session.mcpSessionId || null,
+        startTime: session.startTime,
+        hasWorkSummary: !!session.workSummary,
+        feedbackCount: session.feedback?.length || 0
+      }));
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        socketMappings: matchingStatus,
+        activeSessions: sessionList,
+        totalSockets: socketMappings.length,
+        totalSessions: sessionList.length,
+        matchedSockets: matchingStatus.filter(s => s.hasMatchingSession).length,
+        unmatchedSockets: matchingStatus.filter(s => !s.hasMatchingSession).length
+      });
+    });
+
     // Toolbar 专用路由
     // Ping端点 - 标识为反馈收集服务
     this.app.get('/ping/stagewise', (req, res) => {
@@ -298,6 +349,29 @@ export class WebServer {
       logger.socket('connect', socket.id);
       logger.info(`✅ 新的WebSocket连接: ${socket.id}`);
 
+      // 建立Web Socket与MCP会话的关联
+      const mcpSessionId = socket.handshake.query['mcpSessionId'] as string;
+      logger.debug(`Socket ${socket.id} 握手查询参数:`, socket.handshake.query);
+      logger.debug(`Socket ${socket.id} 握手头部:`, socket.handshake.headers);
+      logger.debug(`Socket ${socket.id} 握手URL: ${socket.handshake.url}`);
+      
+      if (mcpSessionId) {
+        this.socketMcpMapping.set(socket.id, mcpSessionId);
+        logger.info(`✅ Web Socket ${socket.id} 关联到MCP会话: ${mcpSessionId}`);
+        
+        // 验证关联的MCP会话是否有对应的反馈会话
+        const matchingSession = this.findSessionByMcpId(mcpSessionId);
+        if (matchingSession) {
+          logger.info(`✅ 找到匹配的反馈会话: ${matchingSession.sessionId}`);
+        } else {
+          logger.warn(`⚠️  未找到MCP会话 ${mcpSessionId} 对应的反馈会话，可能存在时序问题`);
+        }
+      } else {
+        logger.warn(`⚠️  Web Socket ${socket.id} 未提供mcpSessionId参数`);
+        logger.warn(`URL参数: ${socket.handshake.url}`);
+        logger.warn(`查询参数: ${JSON.stringify(socket.handshake.query)}`);
+      }
+
       // 记录WebSocket连接
       performanceMonitor.recordWebSocketConnection();
 
@@ -311,28 +385,65 @@ export class WebServer {
       socket.on('request_session', () => {
         logger.socket('request_session', socket.id);
 
-        // 查找最新的活跃会话
-        const activeSessions = this.sessionStorage.getAllSessions();
-        let latestSession: { sessionId: string; session: any } | null = null;
-
-        for (const [sessionId, session] of activeSessions) {
-          if (!latestSession || session.startTime > latestSession.session.startTime) {
-            latestSession = { sessionId, session };
-          }
+        // 获取当前Socket关联的MCP会话ID
+        const socketMcpSessionId = this.socketMcpMapping.get(socket.id);
+        
+        logger.info(`会话分配请求 - Socket: ${socket.id}, 关联MCP会话: ${socketMcpSessionId || 'none'}`);
+        
+        // 获取所有活跃会话用于调试
+        const allSessions = this.sessionStorage.getAllSessions();
+        logger.debug(`当前活跃反馈会话数量: ${allSessions.size}`);
+        
+        for (const [sessionId, session] of allSessions) {
+          logger.debug(`活跃会话: ${sessionId}, MCP会话: ${session.mcpSessionId || 'none'}, 创建时间: ${new Date(session.startTime).toISOString()}`);
         }
-
+        
+        if (socketMcpSessionId) {
+          // 查找匹配MCP会话ID的反馈会话
+          const matchingSession = this.findSessionByMcpId(socketMcpSessionId);
+          if (matchingSession) {
+            // 分配匹配的会话
+            logger.info(`✅ 会话分配成功 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 分配到匹配的反馈会话: ${matchingSession.sessionId}`);
+            socket.emit('session_assigned', {
+              session_id: matchingSession.sessionId,
+              work_summary: matchingSession.session.workSummary
+            });
+            return;
+          } else {
+            // 未找到匹配会话，记录详细信息
+            logger.warn(`❌ 未找到匹配会话 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId})`);
+            logger.warn(`可能原因: 1) 会话已超时被清理 2) 会话创建失败 3) MCP会话ID不匹配`);
+            
+            // 检查是否有相似的会话（用于调试）
+            for (const [sessionId, session] of allSessions) {
+              if (session.mcpSessionId) {
+                const similarity = this.calculateSessionIdSimilarity(socketMcpSessionId, session.mcpSessionId);
+                if (similarity > 0.8) {
+                  logger.warn(`发现相似会话: ${sessionId} (MCP会话: ${session.mcpSessionId}), 相似度: ${similarity.toFixed(2)}`);
+                }
+              }
+            }
+          }
+        } else {
+          logger.warn(`❌ Socket ${socket.id} 未关联MCP会话ID`);
+        }
+        
+        // 备选方案：查找最新会话
+        const latestSession = this.findLatestSession();
         if (latestSession) {
-          // 有活跃会话，分配给客户端
-          logger.info(`为客户端 ${socket.id} 分配会话: ${latestSession.sessionId}`);
+          // 分配最新会话并记录警告
+          logger.warn(`⚠️  使用备选方案 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId || 'unknown'}) 分配到最新会话: ${latestSession.sessionId} (MCP会话: ${latestSession.session.mcpSessionId || 'none'})`);
+          logger.warn(`这可能导致反馈路由错误，建议检查会话创建和浏览器打开的时序`);
+          
           socket.emit('session_assigned', {
             session_id: latestSession.sessionId,
             work_summary: latestSession.session.workSummary
           });
         } else {
           // 无活跃会话
-          logger.info(`客户端 ${socket.id} 请求会话，但无活跃会话`);
+          logger.error(`❌ 无活跃会话可分配 - Socket ${socket.id}`);
           socket.emit('no_active_session', {
-            message: '当前无活跃的反馈会话'
+            message: '当前无活跃的反馈会话，请重新调用collect_feedback工具'
           });
         }
       });
@@ -341,19 +452,29 @@ export class WebServer {
       socket.on('request_latest_summary', () => {
         logger.socket('request_latest_summary', socket.id);
 
-        // 查找最新的活跃会话
-        const activeSessions = this.sessionStorage.getAllSessions();
-        let latestSession: { sessionId: string; session: any } | null = null;
-
-        for (const [sessionId, session] of activeSessions) {
-          if (!latestSession || session.startTime > latestSession.session.startTime) {
-            latestSession = { sessionId, session };
+        // 获取当前Socket关联的MCP会话ID
+        const socketMcpSessionId = this.socketMcpMapping.get(socket.id);
+        
+        if (socketMcpSessionId) {
+          // 优先返回匹配MCP会话的工作汇报
+          const matchingSession = this.findSessionByMcpId(socketMcpSessionId);
+          if (matchingSession && matchingSession.session.workSummary) {
+            logger.info(`为Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 返回匹配的工作汇报`);
+            socket.emit('latest_summary_response', {
+              success: true,
+              work_summary: matchingSession.session.workSummary,
+              session_id: matchingSession.sessionId,
+              timestamp: matchingSession.session.startTime
+            });
+            return;
           }
         }
 
+        // 备选：返回最新的工作汇报
+        const latestSession = this.findLatestSession();
         if (latestSession && latestSession.session.workSummary) {
           // 找到最新的工作汇报
-          logger.info(`为客户端 ${socket.id} 返回最新工作汇报`);
+          logger.warn(`Socket ${socket.id} (MCP会话: ${socketMcpSessionId || 'unknown'}) 未找到匹配会话，返回最新工作汇报`);
           socket.emit('latest_summary_response', {
             success: true,
             work_summary: latestSession.session.workSummary,
@@ -362,7 +483,7 @@ export class WebServer {
           });
         } else {
           // 没有找到工作汇报
-          logger.info(`客户端 ${socket.id} 请求最新工作汇报，但未找到`);
+          logger.info(`Socket ${socket.id} 请求最新工作汇报，但未找到`);
           socket.emit('latest_summary_response', {
             success: false,
             message: '暂无最新工作汇报，请等待AI调用collect_feedback工具函数'
@@ -402,10 +523,72 @@ export class WebServer {
         logger.socket('disconnect', socket.id, { reason });
         logger.info(`❌ WebSocket连接断开: ${socket.id}, 原因: ${reason}`);
 
+        // 清理Web Socket与MCP会话的关联
+        const mcpSessionId = this.socketMcpMapping.get(socket.id);
+        if (mcpSessionId) {
+          this.socketMcpMapping.delete(socket.id);
+          logger.info(`清理Web Socket ${socket.id} 与MCP会话 ${mcpSessionId} 的关联`);
+        }
+
         // 记录WebSocket断开连接
         performanceMonitor.recordWebSocketDisconnection();
       });
     });
+  }
+
+  /**
+   * 计算两个会话ID的相似度（用于调试）
+   */
+  private calculateSessionIdSimilarity(id1: string, id2: string): number {
+    if (id1 === id2) return 1.0;
+    
+    const len1 = id1.length;
+    const len2 = id2.length;
+    const maxLen = Math.max(len1, len2);
+    
+    if (maxLen === 0) return 1.0;
+    
+    let matches = 0;
+    const minLen = Math.min(len1, len2);
+    
+    for (let i = 0; i < minLen; i++) {
+      if (id1[i] === id2[i]) {
+        matches++;
+      }
+    }
+    
+    return matches / maxLen;
+  }
+
+  /**
+   * 根据MCP会话ID查找对应的反馈会话
+   */
+  private findSessionByMcpId(mcpSessionId: string): { sessionId: string; session: any } | null {
+    const activeSessions = this.sessionStorage.getAllSessions();
+    
+    for (const [sessionId, session] of activeSessions) {
+      if (session.mcpSessionId === mcpSessionId) {
+        return { sessionId, session };
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * 查找最新的活跃会话
+   */
+  private findLatestSession(): { sessionId: string; session: any } | null {
+    const activeSessions = this.sessionStorage.getAllSessions();
+    let latestSession: { sessionId: string; session: any } | null = null;
+
+    for (const [sessionId, session] of activeSessions) {
+      if (!latestSession || session.startTime > latestSession.session.startTime) {
+        latestSession = { sessionId, session };
+      }
+    }
+
+    return latestSession;
   }
 
   /**
@@ -419,6 +602,41 @@ export class WebServer {
         error: '会话不存在或已过期'
       });
       return;
+    }
+
+    // 验证反馈来源（确保来自正确的MCP会话关联的Web客户端）
+    if (session.mcpSessionId) {
+      const socketMcpSessionId = this.socketMcpMapping.get(socket.id);
+      logger.debug(`反馈来源验证 - Socket: ${socket.id}, Socket关联的MCP会话: ${socketMcpSessionId}, 反馈会话的MCP会话: ${session.mcpSessionId}`);
+      
+      if (socketMcpSessionId !== session.mcpSessionId) {
+        logger.warn(`❌ 反馈来源验证失败: Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 尝试提交到会话 ${feedbackData.sessionId} (MCP会话: ${session.mcpSessionId})`);
+        
+        // 提供详细的诊断信息
+        logger.warn(`诊断信息:`);
+        logger.warn(`  - Socket ID: ${socket.id}`);
+        logger.warn(`  - Socket关联的MCP会话: ${socketMcpSessionId || 'none'}`);
+        logger.warn(`  - 反馈会话ID: ${feedbackData.sessionId}`);
+        logger.warn(`  - 反馈会话关联的MCP会话: ${session.mcpSessionId}`);
+        logger.warn(`  - 会话创建时间: ${new Date(session.startTime).toISOString()}`);
+        
+        // 检查是否存在正确的会话
+        const correctSession = this.findSessionByMcpId(socketMcpSessionId || '');
+        if (correctSession) {
+          logger.warn(`  - 发现正确的会话: ${correctSession.sessionId} (MCP会话: ${correctSession.session.mcpSessionId})`);
+          logger.warn(`  - 建议: 用户可能需要刷新页面或重新打开正确的反馈链接`);
+        } else {
+          logger.warn(`  - 未找到Socket对应的正确会话，可能已超时或被清理`);
+        }
+        
+        socket.emit('feedback_error', {
+          error: '反馈来源验证失败，请刷新页面重试'
+        });
+        return;
+      }
+      logger.info(`✅ 反馈来源验证通过: MCP会话 ${session.mcpSessionId}`);
+    } else {
+      logger.debug(`反馈会话 ${feedbackData.sessionId} 没有关联MCP会话，跳过来源验证`);
     }
 
     try {
@@ -500,12 +718,68 @@ export class WebServer {
   }
 
   /**
+   * 定向广播到特定MCP会话的Web客户端
+   */
+  private broadcastToMcpSession(mcpSessionId: string, data: any): void {
+    let broadcastCount = 0;
+    
+    for (const [socketId, sessionId] of this.socketMcpMapping) {
+      if (sessionId === mcpSessionId) {
+        this.io.to(socketId).emit('work_summary_broadcast', data);
+        broadcastCount++;
+      }
+    }
+    
+    logger.debug(`定向广播到MCP会话 ${mcpSessionId} 的 ${broadcastCount} 个Web客户端`);
+    
+    // 如果没有找到关联的Web客户端，记录警告
+    if (broadcastCount === 0) {
+      logger.warn(`未找到MCP会话 ${mcpSessionId} 关联的Web客户端，可能需要手动打开浏览器`);
+    }
+  }
+
+  /**
+   * 清理MCP会话关联的反馈会话
+   */
+  cleanupMcpSession(mcpSessionId: string): void {
+    logger.info(`清理MCP会话关联的反馈会话: ${mcpSessionId}`);
+    
+    // 删除关联的反馈会话
+    const deleted = this.sessionStorage.deleteSessionByMcpId(mcpSessionId);
+    if (deleted) {
+      logger.info(`已清理MCP会话 ${mcpSessionId} 关联的反馈会话`);
+    } else {
+      logger.debug(`MCP会话 ${mcpSessionId} 没有关联的反馈会话需要清理`);
+    }
+    
+    // 清理Web Socket映射（通过遍历查找）
+    const socketsToRemove: string[] = [];
+    for (const [socketId, sessionId] of this.socketMcpMapping) {
+      if (sessionId === mcpSessionId) {
+        socketsToRemove.push(socketId);
+      }
+    }
+    
+    for (const socketId of socketsToRemove) {
+      this.socketMcpMapping.delete(socketId);
+      logger.debug(`清理Web Socket ${socketId} 与MCP会话 ${mcpSessionId} 的关联`);
+    }
+  }
+
+  /**
    * 收集用户反馈
    */
-  async collectFeedback(workSummary: string, timeoutSeconds: number): Promise<FeedbackData[]> {
+  async collectFeedback(workSummary: string, timeoutSeconds: number, mcpSessionId?: string): Promise<FeedbackData[]> {
     const sessionId = this.generateSessionId();
     
-    logger.info(`创建反馈会话: ${sessionId}, 超时: ${timeoutSeconds}秒`);
+    logger.info(`创建反馈会话: ${sessionId}, 超时: ${timeoutSeconds}秒, MCP会话: ${mcpSessionId || 'unknown'}`);
+    
+    // 严格的会话ID验证
+    if (!mcpSessionId) {
+      logger.warn(`警告: 反馈会话 ${sessionId} 没有关联的MCP会话ID，可能导致反馈路由问题`);
+      // 可以选择拒绝服务或继续使用兼容模式
+      // throw new MCPError('Missing MCP session ID for feedback collection', 'MISSING_MCP_SESSION_ID');
+    }
     
     return new Promise((resolve, reject) => {
       // 创建会话
@@ -514,23 +788,46 @@ export class WebServer {
         feedback: [],
         startTime: Date.now(),
         timeout: timeoutSeconds * 1000,
+        mcpSessionId,  // 设置MCP会话ID关联
         resolve,
         reject
       };
 
       this.sessionStorage.createSession(sessionId, session);
-
-      // 立即广播工作汇报到所有连接的客户端
-      this.io.emit('work_summary_broadcast', {
-        session_id: sessionId,
-        work_summary: workSummary,
-        timestamp: Date.now()
-      });
       
-      logger.info(`工作汇报已广播到所有客户端: ${sessionId}`);
+      // 验证会话创建成功
+      const createdSession = this.sessionStorage.getSession(sessionId);
+      if (!createdSession) {
+        logger.error(`❌ 会话创建失败: ${sessionId}`);
+        reject(new MCPError('Failed to create feedback session', 'SESSION_CREATION_FAILED'));
+        return;
+      }
+      
+      logger.info(`✅ 反馈会话创建成功: ${sessionId}, MCP会话: ${mcpSessionId || 'none'}`);
+
+      // 根据是否有MCP会话ID决定广播方式
+      if (mcpSessionId) {
+        // 定向广播到特定MCP会话的Web客户端
+        this.broadcastToMcpSession(mcpSessionId, {
+          session_id: sessionId,
+          work_summary: workSummary,
+          timestamp: Date.now()
+        });
+        logger.info(`工作汇报已定向广播到MCP会话 ${mcpSessionId} 的客户端: ${sessionId}`);
+      } else {
+        // 兼容模式：广播到所有客户端（记录警告）
+        logger.warn(`使用兼容模式广播到所有客户端: ${sessionId}`);
+        this.io.emit('work_summary_broadcast', {
+          session_id: sessionId,
+          work_summary: workSummary,
+          timestamp: Date.now()
+        });
+        logger.info(`工作汇报已广播到所有客户端: ${sessionId}`);
+      }
 
       // 设置超时
       const timeoutId = setTimeout(() => {
+        logger.warn(`⏰ 反馈会话超时: ${sessionId} (${timeoutSeconds}秒)`);
         this.sessionStorage.deleteSession(sessionId);
         reject(new MCPError(
           `Feedback collection timeout after ${timeoutSeconds} seconds`,
@@ -538,44 +835,50 @@ export class WebServer {
         ));
       }, timeoutSeconds * 1000);
 
-      // 打开浏览器
-      this.openFeedbackPage(sessionId).catch(error => {
-        logger.error('打开反馈页面失败:', error);
-        clearTimeout(timeoutId);
-        this.sessionStorage.deleteSession(sessionId);
-        reject(error);
-      });
+      // 延迟打开浏览器，确保会话完全创建
+      setTimeout(() => {
+        this.openFeedbackPage(sessionId, mcpSessionId).catch(error => {
+          logger.error('打开反馈页面失败:', error);
+          clearTimeout(timeoutId);
+          this.sessionStorage.deleteSession(sessionId);
+          reject(error);
+        });
+      }, 100); // 100ms延迟确保会话完全创建
     });
   }
 
   /**
    * 生成反馈页面URL
    */
-  private generateFeedbackUrl(sessionId: string): string {
+  private generateFeedbackUrl(sessionId: string, mcpSessionId?: string): string {
     // 如果启用了固定URL模式，返回根路径
     if (this.config.useFixedUrl) {
       // 优先使用配置的服务器基础URL
       if (this.config.serverBaseUrl) {
-        return this.config.serverBaseUrl;
+        const baseUrl = this.config.serverBaseUrl;
+        return mcpSessionId ? `${baseUrl}?mcpSessionId=${mcpSessionId}` : baseUrl;
       }
       // 使用配置的主机名
       const host = this.config.serverHost || 'localhost';
-      return `http://${host}:${this.port}`;
+      const baseUrl = `http://${host}:${this.port}`;
+      return mcpSessionId ? `${baseUrl}?mcpSessionId=${mcpSessionId}` : baseUrl;
     }
 
     // 传统模式：包含会话ID参数
     if (this.config.serverBaseUrl) {
-      return `${this.config.serverBaseUrl}/?mode=feedback&session=${sessionId}`;
+      const baseUrl = `${this.config.serverBaseUrl}/?mode=feedback&session=${sessionId}`;
+      return mcpSessionId ? `${baseUrl}&mcpSessionId=${mcpSessionId}` : baseUrl;
     }
     const host = this.config.serverHost || 'localhost';
-    return `http://${host}:${this.port}/?mode=feedback&session=${sessionId}`;
+    const baseUrl = `http://${host}:${this.port}/?mode=feedback&session=${sessionId}`;
+    return mcpSessionId ? `${baseUrl}&mcpSessionId=${mcpSessionId}` : baseUrl;
   }
 
   /**
    * 打开反馈页面
    */
-  private async openFeedbackPage(sessionId: string): Promise<void> {
-    const url = this.generateFeedbackUrl(sessionId);
+  private async openFeedbackPage(sessionId: string, mcpSessionId?: string): Promise<void> {
+    const url = this.generateFeedbackUrl(sessionId, mcpSessionId);
     logger.info(`打开反馈页面: ${url}`);
 
     try {
@@ -767,6 +1070,25 @@ export class WebServer {
    */
   getPort(): number {
     return this.port;
+  }
+
+  /**
+   * 获取会话映射统计信息（用于调试）
+   */
+  getSessionMappingStats(): {
+    socketMcpMappings: Array<{ socketId: string; mcpSessionId: string }>;
+    sessionStorageStats: any;
+  } {
+    const socketMcpMappings: Array<{ socketId: string; mcpSessionId: string }> = [];
+    
+    for (const [socketId, mcpSessionId] of this.socketMcpMapping) {
+      socketMcpMappings.push({ socketId, mcpSessionId });
+    }
+    
+    return {
+      socketMcpMappings,
+      sessionStorageStats: this.sessionStorage.getMcpSessionMappingStats()
+    };
   }
 
 

@@ -3,10 +3,9 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { CallToolResult, ImageContent, TextContent } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResult, ImageContent, TextContent, isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
@@ -19,7 +18,6 @@ import { WebServer } from './web-server.js';
  * MCP服务器类
  */
 export class MCPServer {
-  private mcpServer: McpServer;
   private webServer: WebServer;
   private toolbarServer: ToolbarServer;
   private config: Config;
@@ -28,13 +26,23 @@ export class MCPServer {
   // HTTP传输相关
   private httpApp?: express.Application;
   private httpServer?: any;
-  private transports: Record<string, StreamableHTTPServerTransport | SSEServerTransport> = {};
+  private transports: Record<string, StreamableHTTPServerTransport> = {};
 
   constructor(config: Config) {
     this.config = config;
 
-    // 创建MCP服务器实例
-    this.mcpServer = new McpServer({
+    // 创建Web服务器实例
+    this.webServer = new WebServer(config);
+
+    // 创建Toolbar服务器实例
+    this.toolbarServer = new ToolbarServer();
+  }
+
+  /**
+   * 创建MCP服务器实例
+   */
+  private createMcpServerInstance(): McpServer {
+    const server = new McpServer({
       name: 'mcp-feedback-collector',
       version: '2.0.8'
     }, {
@@ -43,27 +51,8 @@ export class MCPServer {
       }
     });
 
-    // 设置初始化完成回调
-    this.mcpServer.server.oninitialized = () => {
-      logger.info('✅ MCP初始化完成');
-    };
-
-    // 创建Web服务器实例
-    this.webServer = new WebServer(config);
-
-    // 创建Toolbar服务器实例
-    this.toolbarServer = new ToolbarServer();
-
-    // 注册MCP工具函数
-    this.registerTools();
-  }
-
-  /**
-   * 注册MCP工具函数
-   */
-  private registerTools(): void {
-    // 注册collect_feedback工具 - 使用新的registerTool方法
-    this.mcpServer.registerTool(
+    // 注册collect_feedback工具
+    server.registerTool(
       'collect_feedback',
       {
         description: 'Collect feedback from users about AI work summary. This tool opens a web interface for users to provide feedback on the AI\'s work.',
@@ -98,9 +87,7 @@ export class MCPServer {
       }
     );
 
-    if (logger.getLevel() !== 'silent') {
-      logger.info('MCP工具函数注册完成');
-    }
+    return server;
   }
 
   /**
@@ -126,21 +113,32 @@ export class MCPServer {
       next();
     });
 
-    // StreamableHTTP端点
-    this.httpApp.all('/mcp', async (req, res) => {
-      await this.handleStreamableHttpRequest(req, res);
+    // StreamableHTTP端点 - 按官方文档标准
+    this.httpApp.post('/mcp', async (req, res) => {
+      await this.handlePostRequest(req, res);
+    });
+    
+    this.httpApp.get('/mcp', async (req, res) => {
+      await this.handleGetRequest(req, res);
+    });
+    
+    this.httpApp.delete('/mcp', async (req, res) => {
+      await this.handleDeleteRequest(req, res);
     });
 
-    // SSE端点（向后兼容）
-    if (this.config.enableSSEFallback) {
-      this.httpApp.get('/sse', async (req, res) => {
-        await this.handleSSEConnection(req, res);
+    // MCP会话调试端点
+    this.httpApp.get('/api/mcp-debug', (req, res) => {
+      const transportIds = Object.keys(this.transports);
+      const webServerStats = this.webServer.getSessionMappingStats();
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        activeMcpTransports: transportIds,
+        totalMcpTransports: transportIds.length,
+        webServerMappings: webServerStats.socketMcpMappings,
+        sessionStorageStats: webServerStats.sessionStorageStats
       });
-
-      this.httpApp.post('/messages', async (req, res) => {
-        await this.handleSSEMessage(req, res);
-      });
-    }
+    });
 
     // 启动HTTP服务器
     return new Promise((resolve, reject) => {
@@ -157,98 +155,57 @@ export class MCPServer {
   }
 
   /**
-   * 处理StreamableHTTP请求
+   * 处理POST请求 - 客户端到服务器通信
    */
-  private async handleStreamableHttpRequest(req: express.Request, res: express.Response): Promise<void> {
+  private async handlePostRequest(req: express.Request, res: express.Response): Promise<void> {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    let transport: StreamableHTTPServerTransport;
 
     try {
-      let transport: StreamableHTTPServerTransport;
-
-      // 检查是否为初始化请求
-      if (!sessionId && this.isInitializeRequest(req.body)) {
-        // 创建新的传输
+      if (sessionId && this.transports[sessionId]) {
+        // 重用现有传输
+        transport = this.transports[sessionId];
+      } else if (!sessionId && isInitializeRequest(req.body)) {
+        // 新的初始化请求
+        console.log('new-sessionId', sessionId);
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (newSessionId: string) => {
-            this.transports[newSessionId] = transport;
-            logger.debug(`StreamableHTTP会话已初始化: ${newSessionId}`);
+          onsessioninitialized: (sessionId) => {
+            // 存储传输
+            this.transports[sessionId] = transport;
           }
         });
 
-        // 设置传输事件处理
+        // 清理传输当关闭时
         transport.onclose = () => {
-          if (transport['sessionId']) {
-            delete this.transports[transport['sessionId']];
-            logger.debug(`StreamableHTTP会话已关闭: ${transport['sessionId']}`);
+          if (transport.sessionId) {
+            delete this.transports[transport.sessionId];
+            // 清理关联的反馈会话
+            this.webServer.cleanupMcpSession(transport.sessionId);
           }
         };
 
-        transport.onerror = (error: Error) => {
-          logger.error('StreamableHTTP传输错误:', error);
-        };
-
+        const server = this.createMcpServerInstance();
+        
         // 连接到MCP服务器
-        await this.mcpServer.connect(transport as any);
-      } else if (sessionId && this.transports[sessionId]) {
-        // 重用现有传输
-        transport = this.transports[sessionId] as StreamableHTTPServerTransport;
+        await server.connect(transport as any);
       } else {
         // 无效请求
         res.status(400).json({
           jsonrpc: '2.0',
           error: {
             code: -32000,
-            message: 'Bad Request: Invalid session ID or method'
+            message: 'Bad Request: No valid session ID provided',
           },
-          id: null
+          id: null,
         });
         return;
       }
 
       // 处理请求
       await transport.handleRequest(req, res, req.body);
-
     } catch (error) {
-      logger.error('StreamableHTTP请求处理失败:', error);
-      if (!res.headersSent) {
-        res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Internal server error'
-          },
-          id: null
-        });
-      }
-    }
-  }
-
-  /**
-   * 处理SSE连接（向后兼容）
-   */
-  private async handleSSEConnection(req: express.Request, res: express.Response): Promise<void> {
-    try {
-      const transport = new SSEServerTransport('/messages', res);
-      const sessionId = (transport as any).sessionId;
-      this.transports[sessionId] = transport;
-
-      // 设置传输事件处理
-      res.on('close', () => {
-        delete this.transports[sessionId];
-        logger.debug(`SSE会话已关闭: ${sessionId}`);
-      });
-
-      transport.onerror = (error: Error) => {
-        logger.error('SSE传输错误:', error);
-      };
-
-      // 连接到MCP服务器
-      await this.mcpServer.connect(transport as any);
-      logger.debug(`SSE会话已建立: ${sessionId}`);
-
-    } catch (error) {
-      logger.error('SSE连接处理失败:', error);
+      logger.error('POST请求处理失败:', error);
       if (!res.headersSent) {
         res.status(500).send('Internal server error');
       }
@@ -256,36 +213,37 @@ export class MCPServer {
   }
 
   /**
-   * 处理SSE消息（向后兼容）
+   * 处理GET请求 - 服务器到客户端通知
    */
-  private async handleSSEMessage(req: express.Request, res: express.Response): Promise<void> {
-    const sessionId = req.query['sessionId'] as string;
-
+  private async handleGetRequest(req: express.Request, res: express.Response): Promise<void> {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
     if (!sessionId || !this.transports[sessionId]) {
-      res.status(400).send('Invalid session ID');
+      res.status(400).send('Invalid or missing session ID');
       return;
     }
-
-    try {
-      const transport = this.transports[sessionId] as SSEServerTransport;
-      await transport.handlePostMessage(req, res, req.body);
-    } catch (error) {
-      logger.error('SSE消息处理失败:', error);
-      if (!res.headersSent) {
-        res.status(500).send('Internal server error');
-      }
-    }
+    
+    const transport = this.transports[sessionId];
+    console.log('sessionId', sessionId);
+    await transport.handleRequest(req, res);
   }
 
   /**
-   * 检查是否为初始化请求
+   * 处理DELETE请求 - 会话终止
    */
-  private isInitializeRequest(body: any): boolean {
-    if (Array.isArray(body)) {
-      return body.some(request => request.method === 'initialize');
+  private async handleDeleteRequest(req: express.Request, res: express.Response): Promise<void> {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    if (!sessionId || !this.transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
+      return;
     }
-    return body && body.method === 'initialize';
+    
+    const transport = this.transports[sessionId];
+    await transport.handleRequest(req, res);
   }
+
+
+
+
 
   /**
    * 实现collect_feedback功能
@@ -294,7 +252,11 @@ export class MCPServer {
     const { work_summary } = params;
     const timeout_seconds = this.config.dialogTimeout;
 
-    logger.info(`开始收集反馈，工作汇报长度: ${work_summary.length}字符，超时: ${timeout_seconds}秒`);
+    // 简化会话ID获取 - 从活跃传输中获取第一个会话ID
+    const activeSessionIds = Object.keys(this.transports);
+    const mcpSessionId = activeSessionIds.length > 0 ? activeSessionIds[0] : undefined;
+    
+    logger.info(`开始收集反馈，工作汇报长度: ${work_summary.length}字符，超时: ${timeout_seconds}秒，MCP会话: ${mcpSessionId || 'unknown'}`);
 
     try {
       // 启动Web服务器（如果未运行）
@@ -302,10 +264,10 @@ export class MCPServer {
         await this.webServer.start();
       }
 
-      // 收集用户反馈
-      const feedback = await this.webServer.collectFeedback(work_summary, timeout_seconds);
+      // 收集用户反馈，传递MCP会话ID
+      const feedback = await this.webServer.collectFeedback(work_summary, timeout_seconds, mcpSessionId);
 
-      logger.info(`反馈收集完成，收到 ${feedback.length} 条反馈`);
+      logger.info(`反馈收集完成，收到 ${feedback.length} 条反馈，MCP会话: ${mcpSessionId || 'unknown'}`);
 
       // 格式化反馈数据为MCP内容（支持图片）
       const content = this.formatFeedbackForMCP(feedback);
@@ -448,7 +410,6 @@ export class MCPServer {
       
       switch (transportMode) {
         case TransportMode.STREAMABLE_HTTP:
-        case TransportMode.SSE:
           // 启动HTTP传输
           await this.initializeHttpTransport();
           logger.info(`✅ MCP服务器启动成功 (${transportMode}模式)`);
@@ -512,7 +473,8 @@ export class MCPServer {
       return originalSend(message);
     };
 
-    await this.mcpServer.connect(transport);
+    const server = this.createMcpServerInstance();
+    await server.connect(transport);
   }
 
   /**
@@ -591,10 +553,7 @@ export class MCPServer {
         this.toolbarServer.stop()
       ]);
       
-      // 关闭MCP服务器
-      if (this.mcpServer) {
-        await this.mcpServer.close();
-      }
+      // MCP服务器实例会随传输关闭自动清理
       
       this.isRunning = false;
       logger.info('✅ 服务器已停止');
