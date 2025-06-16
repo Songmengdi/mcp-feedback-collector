@@ -19,3 +19,16 @@
   }
 }
 ```
+
+# Cursor mcp模式配置(多窗口不冲突)
+使用 npx smd-mcp-feedback-collector@latest 全局启动(在控制台启动一个,之后在cursor中配置)
+
+```json
+{
+  "mcpServers": {
+    "mcp-feedback-collector": {
+      "url": "http://localhost:3001/mcp"
+    }
+  }
+}
+```

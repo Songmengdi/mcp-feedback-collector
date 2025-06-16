@@ -11,6 +11,7 @@ export interface SessionData {
   feedback: FeedbackData[];
   startTime: number;
   timeout: number;
+  mcpSessionId?: string | undefined;  // MCP会话ID，用于关联反馈会话与MCP客户端
   resolve?: (feedback: FeedbackData[]) => void;
   reject?: (error: Error) => void;
 }
@@ -28,6 +29,7 @@ export interface PromptData {
 export class SessionStorage {
   private sessions = new Map<string, SessionData>();
   private prompts = new Map<string, PromptData>();
+  private mcpSessionMapping = new Map<string, string>(); // mcpSessionId -> feedbackSessionId
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(private cleanupIntervalMs: number = 60000) { // 1分钟清理一次
@@ -39,7 +41,14 @@ export class SessionStorage {
    */
   createSession(sessionId: string, data: SessionData): void {
     this.sessions.set(sessionId, data);
-    logger.debug(`会话已创建: ${sessionId}`);
+    
+    // 建立MCP会话映射
+    if (data.mcpSessionId) {
+      this.mcpSessionMapping.set(data.mcpSessionId, sessionId);
+      logger.debug(`会话已创建: ${sessionId}, MCP会话: ${data.mcpSessionId}`);
+    } else {
+      logger.debug(`会话已创建: ${sessionId}`);
+    }
   }
 
   /**
@@ -82,10 +91,19 @@ export class SessionStorage {
    * 删除会话
    */
   deleteSession(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
     const deleted = this.sessions.delete(sessionId);
+    
     if (deleted) {
-      logger.debug(`会话已删除: ${sessionId}`);
+      // 清理MCP会话映射
+      if (session?.mcpSessionId) {
+        this.mcpSessionMapping.delete(session.mcpSessionId);
+        logger.debug(`会话已删除: ${sessionId}, MCP会话: ${session.mcpSessionId}`);
+      } else {
+        logger.debug(`会话已删除: ${sessionId}`);
+      }
     }
+    
     return deleted;
   }
 
@@ -101,6 +119,57 @@ export class SessionStorage {
    */
   getSessionCount(): number {
     return this.sessions.size;
+  }
+
+  /**
+   * 根据MCP会话ID获取反馈会话
+   */
+  getSessionByMcpId(mcpSessionId: string): SessionData | undefined {
+    const feedbackSessionId = this.mcpSessionMapping.get(mcpSessionId);
+    if (!feedbackSessionId) {
+      logger.debug(`未找到MCP会话对应的反馈会话: ${mcpSessionId}`);
+      return undefined;
+    }
+    
+    const session = this.getSession(feedbackSessionId);
+    if (session) {
+      logger.debug(`找到MCP会话对应的反馈会话: ${mcpSessionId} -> ${feedbackSessionId}`);
+    }
+    
+    return session;
+  }
+
+  /**
+   * 根据MCP会话ID删除关联的反馈会话
+   */
+  deleteSessionByMcpId(mcpSessionId: string): boolean {
+    const feedbackSessionId = this.mcpSessionMapping.get(mcpSessionId);
+    if (!feedbackSessionId) {
+      logger.debug(`未找到MCP会话对应的反馈会话: ${mcpSessionId}`);
+      return false;
+    }
+    
+    logger.debug(`删除MCP会话关联的反馈会话: ${mcpSessionId} -> ${feedbackSessionId}`);
+    return this.deleteSession(feedbackSessionId);
+  }
+
+  /**
+   * 获取MCP会话映射统计
+   */
+  getMcpSessionMappingStats(): {
+    totalMappings: number;
+    mappings: Array<{ mcpSessionId: string; feedbackSessionId: string }>;
+  } {
+    const mappings: Array<{ mcpSessionId: string; feedbackSessionId: string }> = [];
+    
+    for (const [mcpSessionId, feedbackSessionId] of this.mcpSessionMapping) {
+      mappings.push({ mcpSessionId, feedbackSessionId });
+    }
+    
+    return {
+      totalMappings: this.mcpSessionMapping.size,
+      mappings
+    };
   }
 
   /**
