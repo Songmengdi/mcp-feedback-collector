@@ -10,7 +10,9 @@ import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
 import { CollectFeedbackParams, Config, FeedbackData, ImageData, MCPError, TransportMode } from '../types/index.js';
+import { ClientIdentifier } from '../utils/client-identifier.js';
 import { logger } from '../utils/logger.js';
+import { PromptManager } from '../utils/prompt-manager.js';
 import { ToolbarServer } from './toolbar-server.js';
 import { WebServer } from './web-server.js';
 
@@ -22,17 +24,28 @@ export class MCPServer {
   private toolbarServer: ToolbarServer;
   private config: Config;
   private isRunning = false;
+  private clientIdentifier: ClientIdentifier;
+  private promptManager: PromptManager;
   
   // HTTP传输相关
   private httpApp?: express.Application;
   private httpServer?: any;
   private transports: Record<string, StreamableHTTPServerTransport> = {};
 
-  constructor(config: Config) {
+  constructor(config: Config, webServer?: WebServer) {
     this.config = config;
+    this.clientIdentifier = ClientIdentifier.getInstance();
+    this.promptManager = new PromptManager();
 
-    // 创建Web服务器实例
-    this.webServer = new WebServer(config);
+    if (webServer) {
+      // 使用传入的WebServer实例（用于stdio模式的多客户端支持）
+      this.webServer = webServer;
+      logger.debug(`使用传入的WebServer实例，客户端ID: ${this.clientIdentifier.getClientId()}`);
+    } else {
+      // 创建新的WebServer实例（保持向后兼容）
+      this.webServer = new WebServer(config);
+      logger.debug('创建新的WebServer实例');
+    }
 
     // 创建Toolbar服务器实例
     this.toolbarServer = new ToolbarServer();
@@ -404,12 +417,12 @@ export class MCPServer {
         this.toolbarServer.start()
       ]);
       
-      // 根据配置选择传输模式（默认使用streamable_http）
-      const transportMode = this.config.transportMode || TransportMode.STREAMABLE_HTTP;
+      // 根据配置选择传输模式（默认使用stdio）
+      const transportMode = this.config.transportMode || TransportMode.STDIO;
       logger.info(`使用传输模式: ${transportMode}`);
       
       switch (transportMode) {
-        case TransportMode.STREAMABLE_HTTP:
+        case TransportMode.MCP:
           // 启动HTTP传输
           await this.initializeHttpTransport();
           logger.info(`✅ MCP服务器启动成功 (${transportMode}模式)`);
@@ -553,6 +566,9 @@ export class MCPServer {
         this.toolbarServer.stop()
       ]);
       
+      // 关闭提示词管理器
+      this.promptManager.close();
+      
       // MCP服务器实例会随传输关闭自动清理
       
       this.isRunning = false;
@@ -569,19 +585,47 @@ export class MCPServer {
   }
 
   /**
+   * 获取客户端ID
+   */
+  getClientId(): string {
+    return this.clientIdentifier.generateClientId();
+  }
+
+  /**
    * 获取服务器状态
    */
   getStatus(): { 
     running: boolean; 
-    webPort?: number | undefined;
-    toolbarPort?: number | undefined;
+    webPort?: number;
+    toolbarPort?: number;
     toolbarStatus?: any;
+    clientId?: string;
   } {
-    return {
-      running: this.isRunning,
-      webPort: this.webServer.isRunning() ? this.webServer.getPort() : undefined,
-      toolbarPort: this.toolbarServer.isRunning() ? this.toolbarServer.getPort() : undefined,
-      toolbarStatus: this.toolbarServer.getToolbarStatus()
+    const result: { 
+      running: boolean; 
+      webPort?: number;
+      toolbarPort?: number;
+      toolbarStatus?: any;
+      clientId?: string;
+    } = {
+      running: this.isRunning
     };
+
+    if (this.webServer.isRunning()) {
+      result.webPort = this.webServer.getPort();
+    }
+
+    if (this.toolbarServer.isRunning()) {
+      result.toolbarPort = this.toolbarServer.getPort();
+    }
+
+    result.toolbarStatus = this.toolbarServer.getToolbarStatus();
+
+    const clientId = this.clientIdentifier.getClientId();
+    if (clientId) {
+      result.clientId = clientId;
+    }
+
+    return result;
   }
 }

@@ -4,20 +4,14 @@
 
 // 基础配置类型
 export interface Config {
-  webPort: number;
   dialogTimeout: number;
   corsOrigin: string;
   maxFileSize: number;
   logLevel: string;
-  // 新增：服务器主机配置
+  // 服务器主机配置
   serverHost?: string | undefined;
   serverBaseUrl?: string | undefined;
-  // 新增：URL和端口优化配置
-  forcePort?: boolean | undefined;           // 强制使用指定端口
-  killProcessOnPortConflict?: boolean | undefined;  // 自动终止占用进程
-  useFixedUrl?: boolean | undefined;         // 使用固定URL，不带会话参数
-  cleanupPortOnStart?: boolean | undefined;  // 启动时清理端口
-  // 新增：MCP传输模式配置
+  // MCP传输模式配置
   transportMode?: TransportMode | undefined;  // MCP传输模式
   mcpPort?: number | undefined;              // MCP HTTP服务器端口
 }
@@ -145,5 +139,5 @@ export interface APIConfig {
 // MCP传输模式枚举
 export enum TransportMode {
   STDIO = 'stdio',                    // 标准输入输出
-  STREAMABLE_HTTP = 'streamable_http'  // StreamableHTTP（默认，推荐）
+  MCP = 'mcp'                         // MCP HTTP模式（原streamable_http）
 }

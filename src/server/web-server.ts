@@ -17,6 +17,7 @@ import { ImageProcessor } from '../utils/image-processor.js';
 import { logger } from '../utils/logger.js';
 import { performanceMonitor } from '../utils/performance-monitor.js';
 import { PortManager } from '../utils/port-manager.js';
+import { PromptManager } from '../utils/prompt-manager.js';
 import { SessionData, SessionStorage } from '../utils/session-storage.js';
 
 /**
@@ -32,10 +33,11 @@ export class WebServer {
   private portManager: PortManager;
   private imageProcessor: ImageProcessor;
   private sessionStorage: SessionStorage;
+  private promptManager: PromptManager;
   private socketMcpMapping = new Map<string, string>(); // socketId -> mcpSessionId
 
 
-  constructor(config: Config) {
+  constructor(config: Config, preAllocatedPort?: number) {
     this.config = config;
     this.portManager = new PortManager();
     this.imageProcessor = new ImageProcessor({
@@ -44,6 +46,12 @@ export class WebServer {
       maxHeight: 2048
     });
     this.sessionStorage = new SessionStorage();
+    this.promptManager = new PromptManager();
+    
+    // 如果提供了预分配端口，直接使用
+    if (preAllocatedPort) {
+      this.port = preAllocatedPort;
+    }
 
     // 创建Express应用
     this.app = express();
@@ -326,6 +334,324 @@ export class WebServer {
         logger.error('[WebServer] 获取prompt失败:', error);
         res.status(500).json({
           error: 'Failed to get prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 提示词管理API端点
+    
+    // 获取所有可用的提示词模式
+    this.app.get('/api/prompts/modes', (req, res) => {
+      try {
+        const modes = this.promptManager.getAvailableModes();
+        const modesWithDetails = modes.map(mode => {
+          const details = this.promptManager.getModeDetails(mode);
+          return {
+            mode,
+            hasCustom: details.hasCustom,
+            hasDefault: details.hasDefault,
+            customPrompt: details.customPrompt ? {
+              created_at: details.customPrompt.created_at,
+              updated_at: details.customPrompt.updated_at
+            } : null
+          };
+        });
+
+        res.json({
+          success: true,
+          modes: modesWithDetails,
+          total: modes.length
+        });
+      } catch (error) {
+        logger.error('获取提示词模式失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get prompt modes',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 获取指定模式的提示词内容
+    this.app.get('/api/prompts/:mode', (req, res) => {
+      try {
+        const { mode } = req.params;
+        const { type = 'both' } = req.query;
+        
+        const details = this.promptManager.getModeDetails(mode);
+        
+        if (!details.hasCustom && !details.hasDefault) {
+          res.status(404).json({
+            success: false,
+            error: 'Prompt mode not found',
+            message: `未找到模式 "${mode}" 的提示词`
+          });
+          return;
+        }
+
+        const result: any = {
+          success: true,
+          mode,
+          hasCustom: details.hasCustom,
+          hasDefault: details.hasDefault
+        };
+
+        if (type === 'custom' || type === 'both') {
+          if (details.hasCustom && details.customPrompt) {
+            result.customPrompt = {
+              content: details.customPrompt.prompt,
+              created_at: details.customPrompt.created_at,
+              updated_at: details.customPrompt.updated_at
+            };
+          }
+        }
+
+        if (type === 'default' || type === 'both') {
+          if (details.hasDefault && details.defaultPrompt) {
+            result.defaultPrompt = {
+              content: details.defaultPrompt
+            };
+          }
+        }
+
+        // 获取当前使用的提示词
+        const currentPrompt = this.promptManager.getPrompt(mode);
+        if (currentPrompt) {
+          result.currentPrompt = {
+            content: currentPrompt,
+            type: details.hasCustom ? 'custom' : 'default'
+          };
+        }
+
+        res.json(result);
+      } catch (error) {
+        logger.error(`获取提示词失败 (mode: ${req.params.mode}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 保存自定义提示词
+    this.app.post('/api/prompts/:mode', (req, res) => {
+      try {
+        const { mode } = req.params;
+        const { prompt } = req.body;
+
+        if (!prompt || typeof prompt !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid prompt content',
+            message: '提示词内容不能为空'
+          });
+          return;
+        }
+
+        // 验证提示词
+        const validation = this.promptManager.validatePrompt(prompt);
+        
+        if (!validation.isValid) {
+          res.status(400).json({
+            success: false,
+            error: 'Prompt validation failed',
+            message: '提示词验证失败',
+            errors: validation.errors
+          });
+          return;
+        }
+
+        // 保存提示词
+        this.promptManager.saveCustomPrompt(mode, prompt);
+
+        res.json({
+          success: true,
+          message: `自定义提示词已保存 (模式: ${mode})`,
+          mode,
+          warnings: validation.warnings.length > 0 ? validation.warnings : undefined
+        });
+      } catch (error) {
+        logger.error(`保存提示词失败 (mode: ${req.params.mode}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to save prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 删除自定义提示词
+    this.app.delete('/api/prompts/:mode', (req, res) => {
+      try {
+        const { mode } = req.params;
+        
+        const details = this.promptManager.getModeDetails(mode);
+        
+        if (!details.hasCustom) {
+          res.json({
+            success: true,
+            message: `模式 "${mode}" 没有自定义提示词`,
+            deleted: false
+          });
+          return;
+        }
+
+        const deleted = this.promptManager.deleteCustomPrompt(mode);
+        
+        res.json({
+          success: true,
+          message: deleted 
+            ? `自定义提示词已删除 (模式: ${mode})`
+            : `模式 "${mode}" 没有自定义提示词可删除`,
+          deleted,
+          willFallbackToDefault: deleted && details.hasDefault
+        });
+      } catch (error) {
+        logger.error(`删除提示词失败 (mode: ${req.params.mode}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to delete prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 验证提示词
+    this.app.post('/api/prompts/:mode/validate', (req, res) => {
+      try {
+        const { mode } = req.params;
+        const { prompt } = req.body;
+
+        if (!prompt || typeof prompt !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid prompt content',
+            message: '提示词内容不能为空'
+          });
+          return;
+        }
+
+        const validation = this.promptManager.validatePrompt(prompt);
+
+        res.json({
+          success: true,
+          mode,
+          validation: {
+            isValid: validation.isValid,
+            errors: validation.errors,
+            warnings: validation.warnings
+          }
+        });
+      } catch (error) {
+        logger.error(`验证提示词失败 (mode: ${req.params.mode}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to validate prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 重置到默认提示词
+    this.app.post('/api/prompts/:mode/reset', (req, res) => {
+      try {
+        const { mode } = req.params;
+        
+        const details = this.promptManager.getModeDetails(mode);
+        
+        if (!details.hasDefault) {
+          res.status(400).json({
+            success: false,
+            error: 'No default prompt available',
+            message: `模式 "${mode}" 没有默认提示词可重置`
+          });
+          return;
+        }
+
+        if (!details.hasCustom) {
+          res.json({
+            success: true,
+            message: `模式 "${mode}" 已经在使用默认提示词`,
+            reset: false
+          });
+          return;
+        }
+
+        const reset = this.promptManager.resetToDefault(mode);
+        
+        res.json({
+          success: true,
+          message: reset 
+            ? `已重置到默认提示词 (模式: ${mode})`
+            : `模式 "${mode}" 重置失败`,
+          reset
+        });
+      } catch (error) {
+        logger.error(`重置提示词失败 (mode: ${req.params.mode}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to reset prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 导出所有自定义提示词
+    this.app.get('/api/prompts/export', (req, res) => {
+      try {
+        const prompts = this.promptManager.exportCustomPrompts();
+        
+        const exportData = {
+          version: '1.0',
+          exported_at: new Date().toISOString(),
+          prompts: prompts
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="prompts-export-${Date.now()}.json"`);
+        res.json(exportData);
+      } catch (error) {
+        logger.error('导出提示词失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to export prompts',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 导入自定义提示词
+    this.app.post('/api/prompts/import', (req, res) => {
+      try {
+        const { prompts } = req.body;
+
+        if (!prompts || !Array.isArray(prompts)) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data',
+            message: '导入数据格式无效：缺少prompts数组'
+          });
+          return;
+        }
+
+        const result = this.promptManager.importCustomPrompts(prompts);
+
+        res.json({
+          success: true,
+          message: `导入完成: 成功 ${result.success} 个, 失败 ${result.failed} 个`,
+          result: {
+            success: result.success,
+            failed: result.failed,
+            errors: result.errors
+          }
+        });
+      } catch (error) {
+        logger.error('导入提示词失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to import prompts',
           message: error instanceof Error ? error.message : 'Unknown error'
         });
       }
@@ -851,24 +1177,13 @@ export class WebServer {
    * 生成反馈页面URL
    */
   private generateFeedbackUrl(sessionId: string, mcpSessionId?: string): string {
-    // 如果启用了固定URL模式，返回根路径
-    if (this.config.useFixedUrl) {
-      // 优先使用配置的服务器基础URL
-      if (this.config.serverBaseUrl) {
-        const baseUrl = this.config.serverBaseUrl;
-        return mcpSessionId ? `${baseUrl}?mcpSessionId=${mcpSessionId}` : baseUrl;
-      }
-      // 使用配置的主机名
-      const host = this.config.serverHost || 'localhost';
-      const baseUrl = `http://${host}:${this.port}`;
-      return mcpSessionId ? `${baseUrl}?mcpSessionId=${mcpSessionId}` : baseUrl;
-    }
-
-    // 传统模式：包含会话ID参数
+    // 优先使用配置的服务器基础URL
     if (this.config.serverBaseUrl) {
       const baseUrl = `${this.config.serverBaseUrl}/?mode=feedback&session=${sessionId}`;
       return mcpSessionId ? `${baseUrl}&mcpSessionId=${mcpSessionId}` : baseUrl;
     }
+    
+    // 使用本地地址
     const host = this.config.serverHost || 'localhost';
     const baseUrl = `http://${host}:${this.port}/?mode=feedback&session=${sessionId}`;
     return mcpSessionId ? `${baseUrl}&mcpSessionId=${mcpSessionId}` : baseUrl;
@@ -934,34 +1249,16 @@ export class WebServer {
     }
 
     try {
-      // 根据配置选择端口策略
-      if (this.config.forcePort) {
-        // 强制端口模式
-        logger.info(`强制端口模式: 尝试使用端口 ${this.config.webPort}`);
-
-        // 根据配置决定是否清理端口
-        if (this.config.cleanupPortOnStart) {
-          logger.info(`启动时端口清理已启用，清理端口 ${this.config.webPort}`);
-          await this.portManager.cleanupPort(this.config.webPort);
-        }
-
-        this.port = await this.portManager.forcePort(
-          this.config.webPort,
-          this.config.killProcessOnPortConflict || false
-        );
+      // 如果没有预分配端口，则查找可用端口
+      if (this.port === 0) {
+        logger.debug('查找可用端口...');
+        this.port = await this.portManager.findAvailablePort();
       } else {
-        // 传统模式：查找可用端口
-        // 如果启用了端口清理且指定了首选端口，先尝试清理
-        if (this.config.cleanupPortOnStart && this.config.webPort) {
-          logger.info(`启动时端口清理已启用，尝试清理首选端口 ${this.config.webPort}`);
-          await this.portManager.cleanupPort(this.config.webPort);
-        }
-
-        this.port = await this.portManager.findAvailablePort(this.config.webPort);
+        logger.debug(`使用预分配端口: ${this.port}`);
       }
 
       // 启动服务器前再次确认端口可用
-      logger.info(`准备在端口 ${this.port} 启动服务器...`);
+      logger.debug(`准备在端口 ${this.port} 启动服务器...`);
 
       // 启动服务器
       await new Promise<void>((resolve, reject) => {
@@ -980,17 +1277,7 @@ export class WebServer {
       });
 
       this.isServerRunning = true;
-
-      // 根据配置显示不同的启动信息
-      if (this.config.forcePort) {
-        logger.info(`✅ Web服务器启动成功 (强制端口): http://localhost:${this.port}`);
-      } else {
-        logger.info(`✅ Web服务器启动成功: http://localhost:${this.port}`);
-      }
-
-      if (this.config.useFixedUrl) {
-        logger.info(`🔗 固定URL模式已启用，访问地址: http://localhost:${this.port}`);
-      }
+      logger.info(`✅ Web服务器启动成功: http://localhost:${this.port}`);
 
     } catch (error) {
       logger.error('Web服务器启动失败:', error);
@@ -1011,12 +1298,15 @@ export class WebServer {
     }
 
     const currentPort = this.port;
-    logger.info(`正在停止Web服务器 (端口: ${currentPort})...`);
+    logger.debug(`正在停止Web服务器 (端口: ${currentPort})...`);
 
     try {
       // 清理所有活跃会话
       this.sessionStorage.clear();
       this.sessionStorage.stopCleanupTimer();
+
+      // 关闭提示词管理器
+      this.promptManager.close();
 
       // 关闭所有WebSocket连接
       this.io.disconnectSockets(true);
@@ -1041,16 +1331,18 @@ export class WebServer {
       });
 
       this.isServerRunning = false;
-      logger.info(`✅ Web服务器已停止 (端口: ${currentPort})`);
 
-      // 等待端口完全释放
-      logger.info(`等待端口 ${currentPort} 完全释放...`);
+      // 释放端口分配（如果不是预分配的端口）
       try {
-        await this.portManager.waitForPortRelease(currentPort, 3000);
-        logger.info(`✅ 端口 ${currentPort} 已完全释放`);
-      } catch (error) {
-        logger.warn(`端口 ${currentPort} 释放超时，但服务器已停止`);
+        await this.portManager.releasePort(currentPort);
+        logger.info(`✅ Web服务器已停止，端口 ${currentPort} 已释放`);
+      } catch (portError) {
+        logger.warn(`释放端口 ${currentPort} 失败:`, portError);
+        logger.info(`✅ Web服务器已停止 (端口: ${currentPort})`);
       }
+
+      // 简单等待端口释放
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
     } catch (error) {
       logger.error('停止Web服务器时出错:', error);

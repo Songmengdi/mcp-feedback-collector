@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import socketService from '../services/socket'
+import promptService from '../services/promptService'
 import { useAppStore } from '../stores/app'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
@@ -97,27 +98,39 @@ const placeholderText = computed(() => {
 })
 
 // 应用快捷语到反馈内容
-const applyQuickPhraseToFeedback = (text: string): string => {
-  const quickPhrase = getCustomQuickPhrase()
-  
-  if (!quickPhrase) {
+const applyQuickPhraseToFeedback = async (text: string): Promise<string> => {
+  try {
+    const quickPhrase = await getCustomQuickPhrase()
+    
+    if (!quickPhrase) {
+      return text
+    }
+    
+    // 检查提示词中是否包含 {{ feedback }} 占位符
+    if (quickPhrase.includes('{{ feedback }}')) {
+      // 如果包含占位符，替换为用户反馈内容
+      return quickPhrase.replace(/\{\{\s*feedback\s*\}\}/g, text)
+    } else {
+      // 如果不包含占位符，提示词在前（顶部），反馈内容在后，用---分割
+      return quickPhrase.trim() + '\n\n---\n' + text
+    }
+  } catch (error) {
+    console.error('应用提示词失败，使用原始反馈内容:', error)
     return text
-  }
-  
-  // 检查提示词中是否包含 {{ feedback }} 占位符
-  if (quickPhrase.includes('{{ feedback }}')) {
-    // 如果包含占位符，替换为用户反馈内容
-    return quickPhrase.replace(/\{\{\s*feedback\s*\}\}/g, text)
-  } else {
-    // 如果不包含占位符，提示词在前（顶部），反馈内容在后，用---分割
-    return quickPhrase.trim() + '\n\n---\n' + text
   }
 }
 
 // 获取自定义快捷语
-const getCustomQuickPhrase = (): string => {
-  const customPhrase = localStorage.getItem(`mcp-custom-quick-phrase-${appStore.currentPhraseMode}`)
-  return customPhrase || appStore.defaultPhrases[appStore.currentPhraseMode]
+const getCustomQuickPhrase = async (): Promise<string> => {
+  try {
+    // 优先从API获取（包含缓存逻辑）
+    const prompt = await promptService.getPrompt(appStore.currentPhraseMode)
+    return prompt || appStore.defaultPhrases[appStore.currentPhraseMode]
+  } catch (error) {
+    console.error('获取提示词失败，使用默认提示词:', error)
+    // 网络错误时回退到默认提示词
+    return appStore.defaultPhrases[appStore.currentPhraseMode]
+  }
 }
 
 // 获取默认反馈内容
@@ -131,7 +144,7 @@ const getDefaultFeedback = (): string => {
 }
 
 // 表单提交处理
-const handleSubmit = () => {
+const handleSubmit = async () => {
   let processedText = feedbackText.value.trim()
 
   // 如果用户未输入内容，使用当前模式的默认反馈
@@ -144,7 +157,12 @@ const handleSubmit = () => {
 
   // 自动附加快捷语（反馈模式是必选的）
   if (processedText) {
-    processedText = applyQuickPhraseToFeedback(processedText)
+    try {
+      processedText = await applyQuickPhraseToFeedback(processedText)
+    } catch (error) {
+      console.error('应用提示词失败:', error)
+      showStatusMessage('warning', '提示词应用失败，使用原始反馈内容')
+    }
   }
 
   console.log('提交反馈:', {

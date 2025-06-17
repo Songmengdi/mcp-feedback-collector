@@ -6,25 +6,26 @@
 
 import { program } from 'commander';
 import fetch from 'node-fetch';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { displayConfig, getConfig } from './config/index.js';
 import { MCPServer } from './server/mcp-server.js';
-import { MCPError } from './types/index.js';
+import { StdioServerLauncher } from './server/stdio-server-launcher.js';
+import { MCPError, TransportMode } from './types/index.js';
+import { ClientIdentifier } from './utils/client-identifier.js';
 import { logger } from './utils/logger.js';
+import { detectMCPModeStatus } from './utils/mode-detector.js';
 
-// 版本信息
-const VERSION = '2.0.8';
+// 动态读取版本信息
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJsonPath = join(__dirname, '../package.json');
+const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+const VERSION = packageJson.version;
 
-// 在最开始检测MCP模式并设置日志级别
-// 改进的MCP模式检测：支持所有传输模式
-const isMCPMode = (process.env['NODE_ENV'] === 'mcp' ||
-                  process.argv.includes('--mcp-mode') ||
-                  (process.env['MCP_TRANSPORT_MODE'] && !process.stdin.isTTY)) &&
-                  !process.env['FORCE_INTERACTIVE'];
-
-if (isMCPMode) {
-  logger.disableColors();
-  logger.setLevel('silent' as any);
-}
+// 注意：日志设置现在统一在startMCPServer函数中处理
+// 这里不再进行全局的日志设置，避免冲突
 
 /**
  * 显示欢迎信息
@@ -42,28 +43,44 @@ async function startMCPServer(options: {
   web?: boolean;
   config?: string;
   debug?: boolean;
+  mode?: string;
   persistent?: boolean;
 }): Promise<void> {
   try {
-    // 加载配置
+    // 使用新的模式检测逻辑
+    const modeStatus = detectMCPModeStatus(options.mode);
+    
+    // 根据检测结果设置日志
+    if (modeStatus.shouldDisableColors) {
+      logger.disableColors();
+    }
+    
+    // 加载配置并覆盖传输模式
     const config = getConfig();
-
-    if (!isMCPMode) {
-      // 交互模式：显示欢迎信息和设置日志级别
-      showWelcome();
-      logger.setLevel(config.logLevel as any);
-      logger.debug(`启动模式: 交互模式 (TTY: ${process.stdin.isTTY})`);
+    config.transportMode = modeStatus.transportMode;
+    
+    // 设置日志级别
+    if (modeStatus.logLevel === 'info') {
+      logger.setLevel('info' as any);
+    } else if (modeStatus.logLevel === 'silent') {
+      logger.setLevel('silent' as any);
     } else {
-      logger.debug(`启动模式: MCP模式 (TTY: ${process.stdin.isTTY})`);
+      // 使用配置文件中的默认级别
+      logger.setLevel(config.logLevel as any);
     }
 
-    // 应用命令行参数
-    if (options.port) {
-      config.webPort = options.port;
+    if (!modeStatus.isMCP) {
+      // 交互模式：显示欢迎信息
+      showWelcome();
+      logger.debug(`启动模式: 交互模式 (传输模式: ${modeStatus.transportMode}, TTY: ${process.stdin.isTTY})`);
+    } else {
+      logger.debug(`启动模式: MCP模式 (传输模式: ${modeStatus.transportMode}, TTY: ${process.stdin.isTTY})`);
     }
+
+    // 注意：端口配置已简化，不再支持命令行指定端口
 
     // 设置调试模式（仅在非MCP模式下）
-    if (!isMCPMode && (options.debug || process.env['LOG_LEVEL'] === 'debug')) {
+    if (!modeStatus.isMCP && (options.debug || process.env['LOG_LEVEL'] === 'debug')) {
       config.logLevel = 'debug';
 
       // 启用文件日志记录
@@ -78,17 +95,45 @@ async function startMCPServer(options: {
       console.log('');
     }
     
-    // 创建并启动MCP服务器
-    const server = new MCPServer(config);
-    
-    if (options.web) {
-      // 仅Web模式
-      logger.info('启动Web模式...');
-      await server.startWebOnly();
+    // 声明server变量
+    let server: MCPServer;
+    let launcher: StdioServerLauncher | undefined;
+
+    // 根据传输模式选择启动方式
+    if (modeStatus.isStdio && !options.web) {
+      // stdio模式：使用专用启动器
+      logger.info('检测到stdio模式，使用专用启动器...');
+      
+      const clientIdentifier = ClientIdentifier.getInstance();
+      const clientEnv = clientIdentifier.getClientEnvironment();
+      
+      logger.debug('客户端环境信息:', clientEnv);
+      
+      launcher = new StdioServerLauncher(config);
+      
+      // 验证stdio环境
+      launcher.validateStdioEnvironment();
+      
+      // 启动stdio客户端服务器
+      server = await launcher.launchForClient();
+      
+      // 显示启动统计信息
+      const stats = launcher.getStats();
+      logger.info(`stdio模式启动完成，活跃服务器: ${stats.activeServers}/${stats.totalServers}`);
+      
     } else {
-      // 完整MCP模式
-      logger.info('启动MCP服务器...');
-      await server.start();
+      // 传统模式：使用原有逻辑
+      server = new MCPServer(config);
+      
+      if (options.web) {
+        // 仅Web模式
+        logger.info('启动Web模式...');
+        await server.startWebOnly();
+      } else {
+        // 完整MCP模式
+        logger.info('启动MCP服务器...');
+        await server.start();
+      }
     }
     
     // 根据模式决定是否保持进程运行
@@ -97,20 +142,26 @@ async function startMCPServer(options: {
       
       // 保持进程运行
       process.stdin.resume();
-    } else {
-      logger.info('🚀 服务器启动完成，使用 --persistent 选项可保持运行');
     }
     
     // 处理优雅关闭
     process.on('SIGINT', async () => {
       logger.info('收到SIGINT信号，正在关闭服务器...');
-      await server.stop();
+      if (launcher) {
+        await launcher.cleanup();
+      } else {
+        await server.stop();
+      }
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
       logger.info('收到SIGTERM信号，正在关闭服务器...');
-      await server.stop();
+      if (launcher) {
+        await launcher.cleanup();
+      } else {
+        await server.stop();
+      }
       process.exit(0);
     });
     
@@ -137,7 +188,6 @@ async function healthCheck(): Promise<void> {
   try {
     const config = getConfig();
     console.log('✅ 配置验证通过');
-    console.log(`🌐 Web端口: ${config.webPort}`);
     console.log(`⏱️  超时时间: ${config.dialogTimeout}秒`);
     
     
@@ -161,11 +211,10 @@ program
 program
   .command('start', { isDefault: true })
   .description('启动MCP反馈收集器')
-  .option('-p, --port <number>', '指定Web服务器端口', parseInt)
   .option('-w, --web', '仅启动Web模式（不启动MCP服务器）')
   .option('-c, --config <path>', '指定配置文件路径')
   .option('-d, --debug', '启用调试模式（显示详细的MCP通信日志）')
-  .option('--mcp-mode', '强制启用MCP模式（用于调试）')
+  .option('-m, --mode <mode>', '指定传输模式 (stdio|mcp)', 'stdio')
   .option('--persistent', '持久运行模式，不自动退出')
   .action(startMCPServer);
 

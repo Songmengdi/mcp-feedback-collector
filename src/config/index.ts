@@ -53,21 +53,15 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
  */
 export function createDefaultConfig(): Config {
   return {
-    webPort: getEnvNumber('MCP_WEB_PORT', 5000),
     dialogTimeout: getEnvNumber('MCP_DIALOG_TIMEOUT', 60000),
     corsOrigin: getEnvVar('MCP_CORS_ORIGIN', '*'),
     maxFileSize: getEnvNumber('MCP_MAX_FILE_SIZE', 10485760), // 10MB
-    logLevel: getEnvVar('LOG_LEVEL', 'debug'),
+    logLevel: getEnvVar('LOG_LEVEL', 'info'),
     // 服务器主机配置
     serverHost: getOptionalEnvVar('MCP_SERVER_HOST'),
     serverBaseUrl: getOptionalEnvVar('MCP_SERVER_BASE_URL'),
-    // URL和端口优化配置
-    forcePort: getEnvBoolean('MCP_FORCE_PORT', false),
-    killProcessOnPortConflict: getEnvBoolean('MCP_KILL_PORT_PROCESS', false),
-    useFixedUrl: getEnvBoolean('MCP_USE_FIXED_URL', true),  // 默认启用固定URL
-    cleanupPortOnStart: getEnvBoolean('MCP_CLEANUP_PORT_ON_START', true),  // 默认启用端口清理
     // MCP传输模式配置
-    transportMode: getEnvVar('MCP_TRANSPORT_MODE', TransportMode.STREAMABLE_HTTP) as TransportMode,
+    transportMode: getEnvVar('MCP_TRANSPORT_MODE', TransportMode.STDIO) as TransportMode,
     mcpPort: getEnvNumber('MCP_HTTP_PORT', 3001)  // MCP HTTP服务器端口
   };
 }
@@ -76,27 +70,11 @@ export function createDefaultConfig(): Config {
  * 验证配置
  */
 export function validateConfig(config: Config): void {
-  // 验证端口范围
-  if (config.webPort < 1024 || config.webPort > 65535) {
-    throw new MCPError(
-      `Invalid port number: ${config.webPort}. Must be between 1024 and 65535.`,
-      'INVALID_PORT'
-    );
-  }
-
   // 验证MCP HTTP端口范围
   if (config.mcpPort && (config.mcpPort < 1024 || config.mcpPort > 65535)) {
     throw new MCPError(
       `Invalid MCP port number: ${config.mcpPort}. Must be between 1024 and 65535.`,
       'INVALID_MCP_PORT'
-    );
-  }
-
-  // 验证端口冲突
-  if (config.mcpPort && config.mcpPort === config.webPort) {
-    throw new MCPError(
-      `MCP port (${config.mcpPort}) cannot be the same as web port (${config.webPort}).`,
-      'PORT_CONFLICT'
     );
   }
 
@@ -148,17 +126,13 @@ export function getConfig(): Config {
  */
 export function displayConfig(config: Config): void {
   console.log('📋 MCP Feedback Collector Configuration:');
-  console.log(`  Web Port: ${config.webPort}`);
+  console.log(`  Web Port: 动态分配`);
   console.log(`  Dialog Timeout: ${config.dialogTimeout}s`);
   console.log(`  CORS Origin: ${config.corsOrigin}`);
   console.log(`  Max File Size: ${(config.maxFileSize / 1024 / 1024).toFixed(1)}MB`);
   console.log(`  Log Level: ${config.logLevel}`);
   console.log(`  Server Host: ${config.serverHost || '自动检测'}`);
   console.log(`  Server Base URL: ${config.serverBaseUrl || '自动生成'}`);
-  console.log(`  Force Port: ${config.forcePort ? 'enabled' : 'disabled'}`);
-  console.log(`  Kill Port Process: ${config.killProcessOnPortConflict ? 'enabled' : 'disabled'}`);
-  console.log(`  Use Fixed URL: ${config.useFixedUrl ? 'enabled' : 'disabled'}`);
-  console.log(`  Cleanup Port On Start: ${config.cleanupPortOnStart ? 'enabled' : 'disabled'}`);
-  console.log(`  Transport Mode: ${config.transportMode || TransportMode.STREAMABLE_HTTP}`);
+  console.log(`  Transport Mode: ${config.transportMode || TransportMode.STDIO}`);
   console.log(`  MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
 }

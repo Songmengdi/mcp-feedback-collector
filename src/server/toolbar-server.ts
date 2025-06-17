@@ -174,12 +174,12 @@ export class ToolbarServer {
           this.forwardPromptToWebServer.bind(this)
         );
         
-        logger.info('[Toolbar] ✅ SRPC WebSocket 桥接器初始化成功');
-        logger.info('[Toolbar] ✅ Toolbar RPC 处理器初始化成功');
+        logger.debug('[Toolbar] ✅ SRPC WebSocket 桥接器初始化成功');
+        logger.debug('[Toolbar] ✅ Toolbar RPC 处理器初始化成功');
         
         // 记录已注册的方法
         const registeredMethods = this.srpcBridge.getRegisteredMethods();
-        logger.info(`[Toolbar] 📋 已注册的 RPC 方法: ${registeredMethods.join(', ')}`);
+        logger.debug(`[Toolbar] 📋 已注册的 RPC 方法: ${registeredMethods.join(', ')}`);
       }
       
     } catch (error) {
@@ -201,7 +201,7 @@ export class ToolbarServer {
       // 优先尝试使用端口5749，如果被占用则从5746开始查找
       this.port = await this.portManager.findToolbarPort(5749);
 
-      logger.info(`[Toolbar] 准备在端口 ${this.port} 启动服务器...`);
+      logger.debug(`[Toolbar] 准备在端口 ${this.port} 启动服务器...`);
 
       // 启动服务器
       await new Promise<void>((resolve, reject) => {
@@ -224,11 +224,11 @@ export class ToolbarServer {
 
       this.isServerRunning = true;
 
-      logger.info(`[Toolbar] ✅ Toolbar服务器启动成功: http://localhost:${this.port}`);
-      logger.info(`[Toolbar] 📡 WebSocket端点: ws://localhost:${this.port}`);
-      logger.info(`[Toolbar] 🔍 Ping端点: http://localhost:${this.port}/ping/stagewise`);
-      logger.info(`[Toolbar] ❤️  健康检查: http://localhost:${this.port}/health`);
-      logger.info(`[Toolbar] 📝 Prompt端点: http://localhost:${this.port}/prompt`);
+      logger.debug(`[Toolbar] ✅ Toolbar服务器启动成功: http://localhost:${this.port}`);
+      logger.debug(`[Toolbar] 📡 WebSocket端点: ws://localhost:${this.port}`);
+      logger.debug(`[Toolbar] 🔍 Ping端点: http://localhost:${this.port}/ping/stagewise`);
+      logger.debug(`[Toolbar] ❤️  健康检查: http://localhost:${this.port}/health`);
+      logger.debug(`[Toolbar] 📝 Prompt端点: http://localhost:${this.port}/prompt`);
 
     } catch (error) {
       logger.error('[Toolbar] 服务器启动失败:', error);
@@ -245,7 +245,7 @@ export class ToolbarServer {
     }
 
     const currentPort = this.port;
-    logger.info(`[Toolbar] 正在停止服务器 (端口: ${currentPort})...`);
+    logger.debug(`[Toolbar] 正在停止服务器 (端口: ${currentPort})...`);
 
     try {
       // 关闭SRPC桥接器
@@ -271,7 +271,7 @@ export class ToolbarServer {
       });
 
       this.isServerRunning = false;
-      logger.info(`[Toolbar] ✅ Toolbar服务器已停止 (端口: ${currentPort})`);
+      logger.debug(`[Toolbar] ✅ Toolbar服务器已停止 (端口: ${currentPort})`);
 
     } catch (error) {
       logger.error('[Toolbar] 停止服务器时出错:', error);
@@ -339,7 +339,7 @@ export class ToolbarServer {
         timeout: 10000 // 10秒超时
       };
 
-      logger.info(`[Toolbar] 正在转发prompt到WebServer: http://${webServerHost}:${webServerPort}/api/receive-prompt`);
+      logger.debug(`[Toolbar] 正在转发prompt到WebServer: http://${webServerHost}:${webServerPort}/api/receive-prompt`);
 
       const req = http.request(options, (res) => {
         let responseData = '';
@@ -352,7 +352,7 @@ export class ToolbarServer {
           try {
             if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
               const result = responseData ? JSON.parse(responseData) : {};
-              logger.info(`[Toolbar] Prompt转发成功: ${res.statusCode}`);
+              logger.debug(`[Toolbar] Prompt转发成功: ${res.statusCode}`);
               resolve(result);
             } else {
               logger.error(`[Toolbar] Prompt转发失败: HTTP ${res.statusCode} - ${responseData}`);
