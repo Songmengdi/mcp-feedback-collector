@@ -11,9 +11,8 @@ import { processManager } from './process-manager.js';
  * 端口管理器
  */
 export class PortManager {
-  private readonly PORT_RANGE_START = 5000;
-  private readonly PORT_RANGE_END = 5019;
-  private readonly MAX_RETRIES = 20;
+  private readonly PORT_START = 5000;
+  private readonly MAX_PORT = 65535;
   
   // Toolbar 专用端口范围
   private readonly TOOLBAR_PORT_RANGE_START = 5746;
@@ -80,23 +79,13 @@ export class PortManager {
   }
 
   /**
-   * 查找可用端口
+   * 查找可用端口（从5000开始递增）
    */
-  async findAvailablePort(preferredPort?: number): Promise<number> {
-    // 如果指定了首选端口，先尝试该端口
-    if (preferredPort) {
-      logger.debug(`检查首选端口: ${preferredPort}`);
-      const available = await this.isPortAvailable(preferredPort);
-      if (available) {
-        logger.info(`使用首选端口: ${preferredPort}`);
-        return preferredPort;
-      } else {
-        logger.warn(`首选端口 ${preferredPort} 不可用，寻找其他端口...`);
-      }
-    }
+  async findAvailablePort(): Promise<number> {
+    logger.debug('开始查找可用端口，从5000开始...');
 
-    // 在端口范围内查找可用端口
-    for (let port = this.PORT_RANGE_START; port <= this.PORT_RANGE_END; port++) {
+    // 从5000开始，依次+1查找可用端口
+    for (let port = this.PORT_START; port <= this.MAX_PORT; port++) {
       logger.debug(`检查端口: ${port}`);
       if (await this.isPortAvailable(port)) {
         logger.info(`找到可用端口: ${port}`);
@@ -104,52 +93,17 @@ export class PortManager {
       }
     }
 
-    // 如果范围内没有可用端口，随机尝试
-    for (let i = 0; i < this.MAX_RETRIES; i++) {
-      const randomPort = Math.floor(Math.random() * (65535 - 1024) + 1024);
-      logger.debug(`尝试随机端口: ${randomPort}`);
-      if (await this.isPortAvailable(randomPort)) {
-        logger.info(`找到随机可用端口: ${randomPort}`);
-        return randomPort;
-      }
-    }
-
     throw new MCPError(
       'No available ports found',
       'NO_AVAILABLE_PORTS',
       { 
-        preferredPort,
-        rangeStart: this.PORT_RANGE_START,
-        rangeEnd: this.PORT_RANGE_END,
-        maxRetries: this.MAX_RETRIES
+        startPort: this.PORT_START,
+        maxPort: this.MAX_PORT
       }
     );
   }
 
-  /**
-   * 为stdio模式查找可用端口（专用端口范围）
-   */
-  async findAvailablePortForStdio(): Promise<number> {
-    // stdio模式专用端口范围 (5020-5039)
-    const STDIO_PORT_START = 5020;
-    const STDIO_PORT_END = 5039;
 
-    logger.debug('为stdio模式查找可用端口...');
-
-    // 在stdio专用范围内查找可用端口
-    for (let port = STDIO_PORT_START; port <= STDIO_PORT_END; port++) {
-      logger.debug(`检查stdio端口: ${port}`);
-      if (await this.isPortTrulyAvailable(port)) {
-        logger.info(`找到stdio可用端口: ${port}`);
-        return port;
-      }
-    }
-
-    logger.warn('stdio专用端口范围已满，使用通用端口范围...');
-
-    // 如果专用范围用完，使用通用范围
-    return this.findAvailablePort();
-  }
 
   /**
    * 获取端口信息
@@ -171,7 +125,8 @@ export class PortManager {
   async getPortRangeStatus(): Promise<PortInfo[]> {
     const results: PortInfo[] = [];
     
-    for (let port = this.PORT_RANGE_START; port <= this.PORT_RANGE_END; port++) {
+    // 检查前20个端口的状态
+    for (let port = this.PORT_START; port < this.PORT_START + 20; port++) {
       const info = await this.getPortInfo(port);
       results.push(info);
     }
@@ -196,119 +151,7 @@ export class PortManager {
     }
   }
 
-  /**
-   * 强制使用指定端口
-   */
-  async forcePort(port: number, killProcess: boolean = false): Promise<number> {
-    logger.info(`强制使用端口: ${port}`);
 
-    // 检查端口是否可用
-    const available = await this.isPortAvailable(port);
-    if (available) {
-      logger.info(`端口 ${port} 可用，直接使用`);
-      return port;
-    }
-
-    if (!killProcess) {
-      throw new MCPError(
-        `Port ${port} is occupied and killProcess is disabled`,
-        'PORT_OCCUPIED',
-        { port, killProcess }
-      );
-    }
-
-    // 尝试强制释放端口
-    logger.warn(`端口 ${port} 被占用，尝试强制释放...`);
-    const released = await processManager.forceReleasePort(port);
-
-    if (!released) {
-      throw new MCPError(
-        `Failed to force release port ${port}`,
-        'PORT_FORCE_RELEASE_FAILED',
-        { port }
-      );
-    }
-
-    // 再次检查端口是否可用
-    const finalCheck = await this.isPortAvailable(port);
-    if (!finalCheck) {
-      throw new MCPError(
-        `Port ${port} is still occupied after force release`,
-        'PORT_STILL_OCCUPIED',
-        { port }
-      );
-    }
-
-    logger.info(`端口 ${port} 强制释放成功`);
-    return port;
-  }
-
-  /**
-   * 等待端口释放（增强版本）
-   */
-  async waitForPortRelease(port: number, timeoutMs: number = 10000): Promise<void> {
-    const startTime = Date.now();
-    logger.info(`等待端口 ${port} 释放，超时时间: ${timeoutMs}ms`);
-
-    while (Date.now() - startTime < timeoutMs) {
-      // 使用深度检查确保端口真正可用
-      if (await this.isPortTrulyAvailable(port)) {
-        logger.info(`端口 ${port} 已完全释放`);
-        return;
-      }
-
-      // 等待200ms后重试（增加等待时间）
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
-    throw new MCPError(
-      `Port ${port} was not released within ${timeoutMs}ms`,
-      'PORT_RELEASE_TIMEOUT',
-      { port, timeoutMs }
-    );
-  }
-
-  /**
-   * 清理指定端口（强制释放并等待）
-   */
-  async cleanupPort(port: number): Promise<void> {
-    logger.info(`开始清理端口: ${port}`);
-
-    // 检查端口是否被占用
-    const processInfo = await processManager.getPortProcess(port);
-    if (!processInfo) {
-      logger.info(`端口 ${port} 未被占用，无需清理`);
-      return;
-    }
-
-    logger.info(`发现占用端口 ${port} 的进程:`, {
-      pid: processInfo.pid,
-      name: processInfo.name,
-      command: processInfo.command
-    });
-
-    // 检查是否是安全的进程
-    if (!processManager.isSafeToKill(processInfo)) {
-      logger.warn(`端口 ${port} 被不安全的进程占用，跳过清理: ${processInfo.name}`);
-      return;
-    }
-
-    // 尝试终止进程
-    logger.info(`尝试终止占用端口 ${port} 的进程: ${processInfo.pid}`);
-    const killed = await processManager.killProcess(processInfo.pid, false);
-
-    if (killed) {
-      // 等待端口释放
-      try {
-        await this.waitForPortRelease(port, 5000);
-        logger.info(`端口 ${port} 清理成功`);
-      } catch (error) {
-        logger.warn(`端口 ${port} 清理后仍未释放，可能需要更多时间`);
-      }
-    } else {
-      logger.warn(`无法终止占用端口 ${port} 的进程: ${processInfo.pid}`);
-    }
-  }
 
   /**
    * 强制释放端口（杀死占用进程）
@@ -322,7 +165,8 @@ export class PortManager {
       // 2. 杀死该进程
       // 3. 等待端口释放
       
-      await this.waitForPortRelease(port, 3000);
+      // 简单等待端口释放
+      await new Promise(resolve => setTimeout(resolve, 1000));
       logger.info(`端口 ${port} 强制释放成功`);
       
     } catch (error) {

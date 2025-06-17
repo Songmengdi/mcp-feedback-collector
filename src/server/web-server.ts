@@ -35,7 +35,7 @@ export class WebServer {
   private socketMcpMapping = new Map<string, string>(); // socketId -> mcpSessionId
 
 
-  constructor(config: Config) {
+  constructor(config: Config, preAllocatedPort?: number) {
     this.config = config;
     this.portManager = new PortManager();
     this.imageProcessor = new ImageProcessor({
@@ -44,6 +44,11 @@ export class WebServer {
       maxHeight: 2048
     });
     this.sessionStorage = new SessionStorage();
+    
+    // 如果提供了预分配端口，直接使用
+    if (preAllocatedPort) {
+      this.port = preAllocatedPort;
+    }
 
     // 创建Express应用
     this.app = express();
@@ -851,24 +856,13 @@ export class WebServer {
    * 生成反馈页面URL
    */
   private generateFeedbackUrl(sessionId: string, mcpSessionId?: string): string {
-    // 如果启用了固定URL模式，返回根路径
-    if (this.config.useFixedUrl) {
-      // 优先使用配置的服务器基础URL
-      if (this.config.serverBaseUrl) {
-        const baseUrl = this.config.serverBaseUrl;
-        return mcpSessionId ? `${baseUrl}?mcpSessionId=${mcpSessionId}` : baseUrl;
-      }
-      // 使用配置的主机名
-      const host = this.config.serverHost || 'localhost';
-      const baseUrl = `http://${host}:${this.port}`;
-      return mcpSessionId ? `${baseUrl}?mcpSessionId=${mcpSessionId}` : baseUrl;
-    }
-
-    // 传统模式：包含会话ID参数
+    // 优先使用配置的服务器基础URL
     if (this.config.serverBaseUrl) {
       const baseUrl = `${this.config.serverBaseUrl}/?mode=feedback&session=${sessionId}`;
       return mcpSessionId ? `${baseUrl}&mcpSessionId=${mcpSessionId}` : baseUrl;
     }
+    
+    // 使用本地地址
     const host = this.config.serverHost || 'localhost';
     const baseUrl = `http://${host}:${this.port}/?mode=feedback&session=${sessionId}`;
     return mcpSessionId ? `${baseUrl}&mcpSessionId=${mcpSessionId}` : baseUrl;
@@ -934,30 +928,12 @@ export class WebServer {
     }
 
     try {
-      // 根据配置选择端口策略
-      if (this.config.forcePort) {
-        // 强制端口模式
-        logger.info(`强制端口模式: 尝试使用端口 ${this.config.webPort}`);
-
-        // 根据配置决定是否清理端口
-        if (this.config.cleanupPortOnStart) {
-          logger.info(`启动时端口清理已启用，清理端口 ${this.config.webPort}`);
-          await this.portManager.cleanupPort(this.config.webPort);
-        }
-
-        this.port = await this.portManager.forcePort(
-          this.config.webPort,
-          this.config.killProcessOnPortConflict || false
-        );
+      // 如果没有预分配端口，则查找可用端口
+      if (this.port === 0) {
+        logger.info('查找可用端口...');
+        this.port = await this.portManager.findAvailablePort();
       } else {
-        // 传统模式：查找可用端口
-        // 如果启用了端口清理且指定了首选端口，先尝试清理
-        if (this.config.cleanupPortOnStart && this.config.webPort) {
-          logger.info(`启动时端口清理已启用，尝试清理首选端口 ${this.config.webPort}`);
-          await this.portManager.cleanupPort(this.config.webPort);
-        }
-
-        this.port = await this.portManager.findAvailablePort(this.config.webPort);
+        logger.info(`使用预分配端口: ${this.port}`);
       }
 
       // 启动服务器前再次确认端口可用
@@ -980,17 +956,7 @@ export class WebServer {
       });
 
       this.isServerRunning = true;
-
-      // 根据配置显示不同的启动信息
-      if (this.config.forcePort) {
-        logger.info(`✅ Web服务器启动成功 (强制端口): http://localhost:${this.port}`);
-      } else {
-        logger.info(`✅ Web服务器启动成功: http://localhost:${this.port}`);
-      }
-
-      if (this.config.useFixedUrl) {
-        logger.info(`🔗 固定URL模式已启用，访问地址: http://localhost:${this.port}`);
-      }
+      logger.info(`✅ Web服务器启动成功: http://localhost:${this.port}`);
 
     } catch (error) {
       logger.error('Web服务器启动失败:', error);
@@ -1043,14 +1009,8 @@ export class WebServer {
       this.isServerRunning = false;
       logger.info(`✅ Web服务器已停止 (端口: ${currentPort})`);
 
-      // 等待端口完全释放
-      logger.info(`等待端口 ${currentPort} 完全释放...`);
-      try {
-        await this.portManager.waitForPortRelease(currentPort, 3000);
-        logger.info(`✅ 端口 ${currentPort} 已完全释放`);
-      } catch (error) {
-        logger.warn(`端口 ${currentPort} 释放超时，但服务器已停止`);
-      }
+      // 简单等待端口释放
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
     } catch (error) {
       logger.error('停止Web服务器时出错:', error);

@@ -48,21 +48,16 @@ export class WebServerManager {
       logger.info(`为客户端 ${clientId} 创建WebServer实例...`);
 
       // 为stdio模式分配专用端口
-      const port = await this.portManager.findAvailablePortForStdio();
+      const port = await this.portManager.findAvailablePort();
       logger.info(`为客户端 ${clientId} 分配端口: ${port}`);
 
       // 创建独立的配置副本
       const instanceConfig: Config = {
-        ...this.baseConfig,
-        webPort: port,
-        // 为stdio模式优化配置
-        forcePort: true,  // 强制使用分配的端口
-        cleanupPortOnStart: true,  // 启动时清理端口
-        useFixedUrl: true  // 使用固定URL
+        ...this.baseConfig
       };
 
-      // 创建WebServer实例
-      const webServer = new WebServer(instanceConfig);
+      // 创建WebServer实例，传入预分配的端口
+      const webServer = new WebServer(instanceConfig, port);
 
       // 存储实例信息
       const instance: WebServerInstance = {
@@ -120,9 +115,6 @@ export class WebServerManager {
       if (instance.webServer.isRunning()) {
         await instance.webServer.stop();
       }
-
-      // 等待端口释放
-      await this.portManager.waitForPortRelease(instance.port, 3000);
 
       // 从映射中移除
       this.instances.delete(clientId);

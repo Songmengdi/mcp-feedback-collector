@@ -59,10 +59,7 @@ async function startMCPServer(options: {
       logger.debug(`启动模式: MCP模式 (TTY: ${process.stdin.isTTY})`);
     }
 
-    // 应用命令行参数
-    if (options.port) {
-      config.webPort = options.port;
-    }
+    // 注意：端口配置已简化，不再支持命令行指定端口
 
     // 设置调试模式（仅在非MCP模式下）
     if (!isMCPMode && (options.debug || process.env['LOG_LEVEL'] === 'debug')) {
@@ -175,7 +172,6 @@ async function healthCheck(): Promise<void> {
   try {
     const config = getConfig();
     console.log('✅ 配置验证通过');
-    console.log(`🌐 Web端口: ${config.webPort}`);
     console.log(`⏱️  超时时间: ${config.dialogTimeout}秒`);
     
     
@@ -199,7 +195,6 @@ program
 program
   .command('start', { isDefault: true })
   .description('启动MCP反馈收集器')
-  .option('-p, --port <number>', '指定Web服务器端口', parseInt)
   .option('-w, --web', '仅启动Web模式（不启动MCP服务器）')
   .option('-c, --config <path>', '指定配置文件路径')
   .option('-d, --debug', '启用调试模式（显示详细的MCP通信日志）')
