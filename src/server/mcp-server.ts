@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { CollectFeedbackParams, Config, FeedbackData, ImageData, MCPError, TransportMode } from '../types/index.js';
 import { ClientIdentifier } from '../utils/client-identifier.js';
 import { logger } from '../utils/logger.js';
+import { PromptManager } from '../utils/prompt-manager.js';
 import { ToolbarServer } from './toolbar-server.js';
 import { WebServer } from './web-server.js';
 
@@ -24,6 +25,7 @@ export class MCPServer {
   private config: Config;
   private isRunning = false;
   private clientIdentifier: ClientIdentifier;
+  private promptManager: PromptManager;
   
   // HTTP传输相关
   private httpApp?: express.Application;
@@ -33,6 +35,7 @@ export class MCPServer {
   constructor(config: Config, webServer?: WebServer) {
     this.config = config;
     this.clientIdentifier = ClientIdentifier.getInstance();
+    this.promptManager = new PromptManager();
 
     if (webServer) {
       // 使用传入的WebServer实例（用于stdio模式的多客户端支持）
@@ -414,12 +417,12 @@ export class MCPServer {
         this.toolbarServer.start()
       ]);
       
-      // 根据配置选择传输模式（默认使用streamable_http）
-      const transportMode = this.config.transportMode || TransportMode.STREAMABLE_HTTP;
+      // 根据配置选择传输模式（默认使用stdio）
+      const transportMode = this.config.transportMode || TransportMode.STDIO;
       logger.info(`使用传输模式: ${transportMode}`);
       
       switch (transportMode) {
-        case TransportMode.STREAMABLE_HTTP:
+        case TransportMode.MCP:
           // 启动HTTP传输
           await this.initializeHttpTransport();
           logger.info(`✅ MCP服务器启动成功 (${transportMode}模式)`);
@@ -562,6 +565,9 @@ export class MCPServer {
         this.webServer.stop(),
         this.toolbarServer.stop()
       ]);
+      
+      // 关闭提示词管理器
+      this.promptManager.close();
       
       // MCP服务器实例会随传输关闭自动清理
       

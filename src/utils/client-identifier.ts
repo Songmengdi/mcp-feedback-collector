@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logger.js';
+import { detectTransportMode, isStdioMode } from './mode-detector.js';
 
 /**
  * 进程信息接口
@@ -82,13 +83,9 @@ export class ClientIdentifier {
    * 检查是否为stdio模式
    */
   isStdioMode(): boolean {
-    // 检查环境变量和TTY状态
-    const isMCPMode = (process.env['NODE_ENV'] === 'mcp' ||
-                      process.argv.includes('--mcp-mode') ||
-                      (process.env['MCP_TRANSPORT_MODE'] === 'stdio' && !process.stdin.isTTY)) &&
-                      !process.env['FORCE_INTERACTIVE'];
-
-    return isMCPMode && process.env['MCP_TRANSPORT_MODE'] === 'stdio';
+    // 使用统一的模式检测逻辑
+    const transportMode = detectTransportMode();
+    return isStdioMode(transportMode);
   }
 
   /**

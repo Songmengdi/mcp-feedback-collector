@@ -33,7 +33,7 @@ export class StdioServerLauncher {
     const clientId = this.clientIdentifier.generateClientId();
     const shortId = this.clientIdentifier.generateShortId();
 
-    logger.info(`[stdio-${shortId}] 开始为客户端启动服务器...`);
+    logger.debug(`[stdio-${shortId}] 开始为客户端启动服务器...`);
 
     // 检查是否已存在服务器实例
     if (this.activeServers.has(clientId)) {
@@ -44,15 +44,15 @@ export class StdioServerLauncher {
 
     try {
       // 创建独立的WebServer实例
-      logger.info(`[stdio-${shortId}] 创建独立WebServer实例...`);
+      logger.debug(`[stdio-${shortId}] 创建独立WebServer实例...`);
       const webServer = await this.webServerManager.createInstance(clientId);
 
       // 创建MCPServer实例
-      logger.info(`[stdio-${shortId}] 创建MCPServer实例...`);
+      logger.debug(`[stdio-${shortId}] 创建MCPServer实例...`);
       const mcpServer = new MCPServer(this.config, webServer);
 
       // 启动服务器
-      logger.info(`[stdio-${shortId}] 启动服务器...`);
+      logger.debug(`[stdio-${shortId}] 启动服务器...`);
       await mcpServer.start();
 
       // 存储服务器映射

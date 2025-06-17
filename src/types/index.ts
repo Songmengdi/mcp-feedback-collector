@@ -139,5 +139,5 @@ export interface APIConfig {
 // MCP传输模式枚举
 export enum TransportMode {
   STDIO = 'stdio',                    // 标准输入输出
-  STREAMABLE_HTTP = 'streamable_http'  // StreamableHTTP（默认，推荐）
+  MCP = 'mcp'                         // MCP HTTP模式（原streamable_http）
 }

@@ -56,12 +56,12 @@ export function createDefaultConfig(): Config {
     dialogTimeout: getEnvNumber('MCP_DIALOG_TIMEOUT', 60000),
     corsOrigin: getEnvVar('MCP_CORS_ORIGIN', '*'),
     maxFileSize: getEnvNumber('MCP_MAX_FILE_SIZE', 10485760), // 10MB
-    logLevel: getEnvVar('LOG_LEVEL', 'debug'),
+    logLevel: getEnvVar('LOG_LEVEL', 'info'),
     // 服务器主机配置
     serverHost: getOptionalEnvVar('MCP_SERVER_HOST'),
     serverBaseUrl: getOptionalEnvVar('MCP_SERVER_BASE_URL'),
     // MCP传输模式配置
-    transportMode: getEnvVar('MCP_TRANSPORT_MODE', TransportMode.STREAMABLE_HTTP) as TransportMode,
+    transportMode: getEnvVar('MCP_TRANSPORT_MODE', TransportMode.STDIO) as TransportMode,
     mcpPort: getEnvNumber('MCP_HTTP_PORT', 3001)  // MCP HTTP服务器端口
   };
 }
@@ -133,6 +133,6 @@ export function displayConfig(config: Config): void {
   console.log(`  Log Level: ${config.logLevel}`);
   console.log(`  Server Host: ${config.serverHost || '自动检测'}`);
   console.log(`  Server Base URL: ${config.serverBaseUrl || '自动生成'}`);
-  console.log(`  Transport Mode: ${config.transportMode || TransportMode.STREAMABLE_HTTP}`);
+  console.log(`  Transport Mode: ${config.transportMode || TransportMode.STDIO}`);
   console.log(`  MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
 }

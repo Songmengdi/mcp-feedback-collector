@@ -45,11 +45,11 @@ export class WebServerManager {
     }
 
     try {
-      logger.info(`为客户端 ${clientId} 创建WebServer实例...`);
+      logger.debug(`为客户端 ${clientId} 创建WebServer实例...`);
 
       // 为stdio模式分配专用端口
       const port = await this.portManager.findAvailablePort();
-      logger.info(`为客户端 ${clientId} 分配端口: ${port}`);
+      logger.debug(`为客户端 ${clientId} 分配端口: ${port}`);
 
       // 创建独立的配置副本
       const instanceConfig: Config = {
@@ -109,22 +109,33 @@ export class WebServerManager {
     }
 
     try {
-      logger.info(`销毁客户端 ${clientId} 的WebServer实例，端口: ${instance.port}`);
+      logger.debug(`销毁客户端 ${clientId} 的WebServer实例，端口: ${instance.port}`);
 
       // 停止WebServer
       if (instance.webServer.isRunning()) {
         await instance.webServer.stop();
       }
 
+      // 释放端口分配
+      await this.portManager.releasePort(instance.port);
+
       // 从映射中移除
       this.instances.delete(clientId);
 
-      logger.info(`✅ 客户端 ${clientId} 的WebServer实例已销毁`);
+      logger.info(`✅ 客户端 ${clientId} 的WebServer实例已销毁，端口 ${instance.port} 已释放`);
 
     } catch (error) {
       logger.error(`销毁客户端 ${clientId} 的WebServer实例失败:`, error);
       // 即使销毁失败，也要从映射中移除，避免内存泄漏
       this.instances.delete(clientId);
+      
+      // 尝试释放端口，即使出错也不抛出异常
+      try {
+        await this.portManager.releasePort(instance.port);
+      } catch (portError) {
+        logger.warn(`释放端口 ${instance.port} 失败:`, portError);
+      }
+      
       throw new MCPError(
         `Failed to destroy WebServer instance for client ${clientId}`,
         'WEBSERVER_INSTANCE_DESTROY_ERROR',
