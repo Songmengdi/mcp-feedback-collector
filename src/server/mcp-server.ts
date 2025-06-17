@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
 import { CollectFeedbackParams, Config, FeedbackData, ImageData, MCPError, TransportMode } from '../types/index.js';
+import { ClientIdentifier } from '../utils/client-identifier.js';
 import { logger } from '../utils/logger.js';
 import { ToolbarServer } from './toolbar-server.js';
 import { WebServer } from './web-server.js';
@@ -22,17 +23,26 @@ export class MCPServer {
   private toolbarServer: ToolbarServer;
   private config: Config;
   private isRunning = false;
+  private clientIdentifier: ClientIdentifier;
   
   // HTTP传输相关
   private httpApp?: express.Application;
   private httpServer?: any;
   private transports: Record<string, StreamableHTTPServerTransport> = {};
 
-  constructor(config: Config) {
+  constructor(config: Config, webServer?: WebServer) {
     this.config = config;
+    this.clientIdentifier = ClientIdentifier.getInstance();
 
-    // 创建Web服务器实例
-    this.webServer = new WebServer(config);
+    if (webServer) {
+      // 使用传入的WebServer实例（用于stdio模式的多客户端支持）
+      this.webServer = webServer;
+      logger.debug(`使用传入的WebServer实例，客户端ID: ${this.clientIdentifier.getClientId()}`);
+    } else {
+      // 创建新的WebServer实例（保持向后兼容）
+      this.webServer = new WebServer(config);
+      logger.debug('创建新的WebServer实例');
+    }
 
     // 创建Toolbar服务器实例
     this.toolbarServer = new ToolbarServer();
@@ -569,19 +579,47 @@ export class MCPServer {
   }
 
   /**
+   * 获取客户端ID
+   */
+  getClientId(): string {
+    return this.clientIdentifier.generateClientId();
+  }
+
+  /**
    * 获取服务器状态
    */
   getStatus(): { 
     running: boolean; 
-    webPort?: number | undefined;
-    toolbarPort?: number | undefined;
+    webPort?: number;
+    toolbarPort?: number;
     toolbarStatus?: any;
+    clientId?: string;
   } {
-    return {
-      running: this.isRunning,
-      webPort: this.webServer.isRunning() ? this.webServer.getPort() : undefined,
-      toolbarPort: this.toolbarServer.isRunning() ? this.toolbarServer.getPort() : undefined,
-      toolbarStatus: this.toolbarServer.getToolbarStatus()
+    const result: { 
+      running: boolean; 
+      webPort?: number;
+      toolbarPort?: number;
+      toolbarStatus?: any;
+      clientId?: string;
+    } = {
+      running: this.isRunning
     };
+
+    if (this.webServer.isRunning()) {
+      result.webPort = this.webServer.getPort();
+    }
+
+    if (this.toolbarServer.isRunning()) {
+      result.toolbarPort = this.toolbarServer.getPort();
+    }
+
+    result.toolbarStatus = this.toolbarServer.getToolbarStatus();
+
+    const clientId = this.clientIdentifier.getClientId();
+    if (clientId) {
+      result.clientId = clientId;
+    }
+
+    return result;
   }
 }

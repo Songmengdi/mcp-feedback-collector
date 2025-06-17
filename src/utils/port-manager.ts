@@ -127,6 +127,31 @@ export class PortManager {
   }
 
   /**
+   * 为stdio模式查找可用端口（专用端口范围）
+   */
+  async findAvailablePortForStdio(): Promise<number> {
+    // stdio模式专用端口范围 (5020-5039)
+    const STDIO_PORT_START = 5020;
+    const STDIO_PORT_END = 5039;
+
+    logger.debug('为stdio模式查找可用端口...');
+
+    // 在stdio专用范围内查找可用端口
+    for (let port = STDIO_PORT_START; port <= STDIO_PORT_END; port++) {
+      logger.debug(`检查stdio端口: ${port}`);
+      if (await this.isPortTrulyAvailable(port)) {
+        logger.info(`找到stdio可用端口: ${port}`);
+        return port;
+      }
+    }
+
+    logger.warn('stdio专用端口范围已满，使用通用端口范围...');
+
+    // 如果专用范围用完，使用通用范围
+    return this.findAvailablePort();
+  }
+
+  /**
    * 获取端口信息
    */
   async getPortInfo(port: number): Promise<PortInfo> {

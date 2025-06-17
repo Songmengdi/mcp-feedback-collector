@@ -8,7 +8,9 @@ import { program } from 'commander';
 import fetch from 'node-fetch';
 import { displayConfig, getConfig } from './config/index.js';
 import { MCPServer } from './server/mcp-server.js';
-import { MCPError } from './types/index.js';
+import { StdioServerLauncher } from './server/stdio-server-launcher.js';
+import { MCPError, TransportMode } from './types/index.js';
+import { ClientIdentifier } from './utils/client-identifier.js';
 import { logger } from './utils/logger.js';
 
 // 版本信息
@@ -78,17 +80,45 @@ async function startMCPServer(options: {
       console.log('');
     }
     
-    // 创建并启动MCP服务器
-    const server = new MCPServer(config);
-    
-    if (options.web) {
-      // 仅Web模式
-      logger.info('启动Web模式...');
-      await server.startWebOnly();
+    // 声明server变量
+    let server: MCPServer;
+    let launcher: StdioServerLauncher | undefined;
+
+    // 根据传输模式选择启动方式
+    if (config.transportMode === TransportMode.STDIO && !options.web) {
+      // stdio模式：使用专用启动器
+      logger.info('检测到stdio模式，使用专用启动器...');
+      
+      const clientIdentifier = ClientIdentifier.getInstance();
+      const clientEnv = clientIdentifier.getClientEnvironment();
+      
+      logger.debug('客户端环境信息:', clientEnv);
+      
+      launcher = new StdioServerLauncher(config);
+      
+      // 验证stdio环境
+      launcher.validateStdioEnvironment();
+      
+      // 启动stdio客户端服务器
+      server = await launcher.launchForClient();
+      
+      // 显示启动统计信息
+      const stats = launcher.getStats();
+      logger.info(`stdio模式启动完成，活跃服务器: ${stats.activeServers}/${stats.totalServers}`);
+      
     } else {
-      // 完整MCP模式
-      logger.info('启动MCP服务器...');
-      await server.start();
+      // 传统模式：使用原有逻辑
+      server = new MCPServer(config);
+      
+      if (options.web) {
+        // 仅Web模式
+        logger.info('启动Web模式...');
+        await server.startWebOnly();
+      } else {
+        // 完整MCP模式
+        logger.info('启动MCP服务器...');
+        await server.start();
+      }
     }
     
     // 根据模式决定是否保持进程运行
@@ -104,13 +134,21 @@ async function startMCPServer(options: {
     // 处理优雅关闭
     process.on('SIGINT', async () => {
       logger.info('收到SIGINT信号，正在关闭服务器...');
-      await server.stop();
+      if (launcher) {
+        await launcher.cleanup();
+      } else {
+        await server.stop();
+      }
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
       logger.info('收到SIGTERM信号，正在关闭服务器...');
-      await server.stop();
+      if (launcher) {
+        await launcher.cleanup();
+      } else {
+        await server.stop();
+      }
       process.exit(0);
     });
     
