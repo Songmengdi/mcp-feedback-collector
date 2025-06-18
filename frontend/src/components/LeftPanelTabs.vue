@@ -19,6 +19,14 @@
       >
         📝
       </button>
+      <button 
+        class="tab-button"
+        :class="{ active: activeTab === 'scene-management' }"
+        @click="activeTab = 'scene-management'"
+        title="场景管理"
+      >
+        🎭
+      </button>
     </div>
 
     <!-- Tab内容 -->
@@ -32,21 +40,27 @@
       <div v-if="activeTab === 'prompt' && appStore.receivedPrompt" class="tab-pane">
         <PromptDisplay />
       </div>
+      
+      <!-- 场景管理Tab -->
+      <div v-if="activeTab === 'scene-management'" class="tab-pane">
+        <SceneManagement />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../stores/app'
 import PromptDisplay from './PromptDisplay.vue'
 import WorkSummary from './WorkSummary.vue'
+import SceneManagement from './SceneManagement.vue'
 
 // Store引用
 const appStore = useAppStore()
 
 // Tab状态管理
-const activeTab = ref<'work-summary' | 'prompt'>('work-summary')
+const activeTab = ref<'work-summary' | 'prompt' | 'scene-management'>('work-summary')
 
 // 监听prompt状态变化
 watch(
@@ -62,6 +76,20 @@ watch(
     }
   }
 )
+
+// 处理场景管理跳转事件
+const handleOpenSceneManagement = () => {
+  activeTab.value = 'scene-management'
+}
+
+// 生命周期
+onMounted(() => {
+  document.addEventListener('openSceneManagement', handleOpenSceneManagement)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('openSceneManagement', handleOpenSceneManagement)
+})
 </script>
 
 <style scoped>
@@ -130,8 +158,6 @@ watch(
   border: 1px solid #3e3e42;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-
-
 
 .tab-content {
   flex: 1;

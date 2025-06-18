@@ -12,7 +12,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { VERSION } from '../index.js';
 
-import { Config, FeedbackData, MCPError } from '../types/index.js';
+import { Config, FeedbackData, MCPError, SceneRequest, SceneModeRequest } from '../types/index.js';
 import { ImageProcessor } from '../utils/image-processor.js';
 import { logger } from '../utils/logger.js';
 import { performanceMonitor } from '../utils/performance-monitor.js';
@@ -341,306 +341,180 @@ export class WebServer {
 
     // 提示词管理API端点
     
-    // 获取所有可用的提示词模式
-    this.app.get('/api/prompts/modes', (req, res) => {
+    // 传统API接口已移除，统一使用场景化API (/api/scenes, /api/unified)
+
+    // ================== 场景管理API端点 ==================
+
+    // 获取所有场景
+    this.app.get('/api/scenes', (req, res) => {
       try {
-        const modes = this.promptManager.getAvailableModes();
-        const modesWithDetails = modes.map(mode => {
-          const details = this.promptManager.getModeDetails(mode);
-          return {
-            mode,
-            hasCustom: details.hasCustom,
-            hasDefault: details.hasDefault,
-            customPrompt: details.customPrompt ? {
-              created_at: details.customPrompt.created_at,
-              updated_at: details.customPrompt.updated_at
-            } : null
-          };
-        });
-
-        res.json({
-          success: true,
-          modes: modesWithDetails,
-          total: modes.length
-        });
-      } catch (error) {
-        logger.error('获取提示词模式失败:', error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to get prompt modes',
-          message: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
-
-    // 获取指定模式的提示词内容
-    this.app.get('/api/prompts/:mode', (req, res) => {
-      try {
-        const { mode } = req.params;
-        const { type = 'both' } = req.query;
-        
-        const details = this.promptManager.getModeDetails(mode);
-        
-        if (!details.hasCustom && !details.hasDefault) {
-          res.status(404).json({
-            success: false,
-            error: 'Prompt mode not found',
-            message: `未找到模式 "${mode}" 的提示词`
-          });
-          return;
-        }
-
-        const result: any = {
-          success: true,
-          mode,
-          hasCustom: details.hasCustom,
-          hasDefault: details.hasDefault
-        };
-
-        if (type === 'custom' || type === 'both') {
-          if (details.hasCustom && details.customPrompt) {
-            result.customPrompt = {
-              content: details.customPrompt.prompt,
-              created_at: details.customPrompt.created_at,
-              updated_at: details.customPrompt.updated_at
-            };
-          }
-        }
-
-        if (type === 'default' || type === 'both') {
-          if (details.hasDefault && details.defaultPrompt) {
-            result.defaultPrompt = {
-              content: details.defaultPrompt
-            };
-          }
-        }
-
-        // 获取当前使用的提示词
-        const currentPrompt = this.promptManager.getPrompt(mode);
-        if (currentPrompt) {
-          result.currentPrompt = {
-            content: currentPrompt,
-            type: details.hasCustom ? 'custom' : 'default'
-          };
-        }
-
-        res.json(result);
-      } catch (error) {
-        logger.error(`获取提示词失败 (mode: ${req.params.mode}):`, error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to get prompt',
-          message: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
-
-    // 保存自定义提示词
-    this.app.post('/api/prompts/:mode', (req, res) => {
-      try {
-        const { mode } = req.params;
-        const { prompt } = req.body;
-
-        if (!prompt || typeof prompt !== 'string') {
-          res.status(400).json({
-            success: false,
-            error: 'Invalid prompt content',
-            message: '提示词内容不能为空'
-          });
-          return;
-        }
-
-        // 验证提示词
-        const validation = this.promptManager.validatePrompt(prompt);
-        
-        if (!validation.isValid) {
-          res.status(400).json({
-            success: false,
-            error: 'Prompt validation failed',
-            message: '提示词验证失败',
-            errors: validation.errors
-          });
-          return;
-        }
-
-        // 保存提示词
-        this.promptManager.saveCustomPrompt(mode, prompt);
-
-        res.json({
-          success: true,
-          message: `自定义提示词已保存 (模式: ${mode})`,
-          mode,
-          warnings: validation.warnings.length > 0 ? validation.warnings : undefined
-        });
-      } catch (error) {
-        logger.error(`保存提示词失败 (mode: ${req.params.mode}):`, error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to save prompt',
-          message: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
-
-    // 删除自定义提示词
-    this.app.delete('/api/prompts/:mode', (req, res) => {
-      try {
-        const { mode } = req.params;
-        
-        const details = this.promptManager.getModeDetails(mode);
-        
-        if (!details.hasCustom) {
-          res.json({
-            success: true,
-            message: `模式 "${mode}" 没有自定义提示词`,
-            deleted: false
-          });
-          return;
-        }
-
-        const deleted = this.promptManager.deleteCustomPrompt(mode);
+        const scenes = this.promptManager.getAllScenes();
+        const convertedScenes = scenes.map(scene => this.convertSceneToFrontendFormat(scene));
         
         res.json({
           success: true,
-          message: deleted 
-            ? `自定义提示词已删除 (模式: ${mode})`
-            : `模式 "${mode}" 没有自定义提示词可删除`,
-          deleted,
-          willFallbackToDefault: deleted && details.hasDefault
-        });
-      } catch (error) {
-        logger.error(`删除提示词失败 (mode: ${req.params.mode}):`, error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to delete prompt',
-          message: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
-
-    // 验证提示词
-    this.app.post('/api/prompts/:mode/validate', (req, res) => {
-      try {
-        const { mode } = req.params;
-        const { prompt } = req.body;
-
-        if (!prompt || typeof prompt !== 'string') {
-          res.status(400).json({
-            success: false,
-            error: 'Invalid prompt content',
-            message: '提示词内容不能为空'
-          });
-          return;
-        }
-
-        const validation = this.promptManager.validatePrompt(prompt);
-
-        res.json({
-          success: true,
-          mode,
-          validation: {
-            isValid: validation.isValid,
-            errors: validation.errors,
-            warnings: validation.warnings
+          data: {
+            scenes: convertedScenes,
+            total: convertedScenes.length,
+            defaultSceneId: scenes.find(s => s.is_default)?.id || (scenes.length > 0 ? scenes[0]?.id : '') || ''
           }
         });
       } catch (error) {
-        logger.error(`验证提示词失败 (mode: ${req.params.mode}):`, error);
+        logger.error('获取场景列表失败:', error);
         res.status(500).json({
           success: false,
-          error: 'Failed to validate prompt',
+          error: 'Failed to get scenes',
           message: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     });
 
-    // 重置到默认提示词
-    this.app.post('/api/prompts/:mode/reset', (req, res) => {
+    // 导出场景配置
+    this.app.get('/api/scenes/export', (req, res) => {
       try {
-        const { mode } = req.params;
+        const config = this.promptManager.exportSceneConfig();
         
-        const details = this.promptManager.getModeDetails(mode);
-        
-        if (!details.hasDefault) {
-          res.status(400).json({
-            success: false,
-            error: 'No default prompt available',
-            message: `模式 "${mode}" 没有默认提示词可重置`
-          });
-          return;
-        }
-
-        if (!details.hasCustom) {
-          res.json({
-            success: true,
-            message: `模式 "${mode}" 已经在使用默认提示词`,
-            reset: false
-          });
-          return;
-        }
-
-        const reset = this.promptManager.resetToDefault(mode);
-        
-        res.json({
-          success: true,
-          message: reset 
-            ? `已重置到默认提示词 (模式: ${mode})`
-            : `模式 "${mode}" 重置失败`,
-          reset
-        });
-      } catch (error) {
-        logger.error(`重置提示词失败 (mode: ${req.params.mode}):`, error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to reset prompt',
-          message: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
-
-    // 导出所有自定义提示词
-    this.app.get('/api/prompts/export', (req, res) => {
-      try {
-        const prompts = this.promptManager.exportCustomPrompts();
-        
+        // 转换数据格式以匹配前端期望的SceneConfigExport格式
         const exportData = {
-          version: '1.0',
+          version: '2.0',
           exported_at: new Date().toISOString(),
-          prompts: prompts
+          config: {
+            version: '2.0',
+            exportedAt: Date.now(),
+            scenes: config.scenes.map(scene => ({
+              id: scene.id,
+              name: scene.name,
+              description: scene.description,
+              icon: scene.icon,
+              isDefault: scene.is_default,
+              sortOrder: scene.sort_order,
+              createdAt: scene.created_at,
+              updatedAt: scene.updated_at
+            })),
+            modes: config.sceneModes.map(mode => ({
+              id: mode.id,
+              sceneId: mode.scene_id,
+              name: mode.name,
+              description: mode.description,
+              shortcut: mode.shortcut,
+              isDefault: mode.is_default,
+              sortOrder: mode.sort_order,
+              defaultFeedback: mode.default_feedback,
+              createdAt: mode.created_at,
+              updatedAt: mode.updated_at
+            })),
+            prompts: config.scenePrompts.map(prompt => ({
+              sceneId: prompt.scene_id,
+              modeId: prompt.mode_id,
+              prompt: prompt.prompt
+            }))
+          }
         };
 
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename="prompts-export-${Date.now()}.json"`);
+        res.setHeader('Content-Disposition', `attachment; filename="scene-config-export-${Date.now()}.json"`);
         res.json(exportData);
       } catch (error) {
-        logger.error('导出提示词失败:', error);
+        logger.error('导出场景配置失败:', error);
         res.status(500).json({
           success: false,
-          error: 'Failed to export prompts',
+          error: 'Failed to export scene config',
           message: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     });
 
-    // 导入自定义提示词
-    this.app.post('/api/prompts/import', (req, res) => {
+    // 导入场景配置
+    this.app.post('/api/scenes/import', (req, res) => {
       try {
-        const { prompts } = req.body;
+        const { config } = req.body;
 
-        if (!prompts || !Array.isArray(prompts)) {
+        if (!config || typeof config !== 'object') {
           res.status(400).json({
             success: false,
             error: 'Invalid import data',
-            message: '导入数据格式无效：缺少prompts数组'
+            message: '导入数据格式无效：缺少config对象'
           });
           return;
         }
 
-        const result = this.promptManager.importCustomPrompts(prompts);
+        // 验证导入数据的基本结构
+        const validationErrors: string[] = [];
+        
+        if (!Array.isArray(config.scenes)) {
+          validationErrors.push('缺少scenes数组');
+        }
+        
+        if (!Array.isArray(config.modes)) {
+          validationErrors.push('缺少modes数组');  
+        }
+        
+        if (!Array.isArray(config.prompts)) {
+          validationErrors.push('缺少prompts数组');
+        }
+
+        if (validationErrors.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data structure',
+            message: `导入数据结构无效: ${validationErrors.join(', ')}`
+          });
+          return;
+        }
+
+        // 转换前端格式到后端格式，并添加数据验证
+        const backendConfig = {
+          scenes: config.scenes.map((scene: any) => {
+            if (!scene.id || !scene.name) {
+              throw new Error(`场景数据不完整: ${JSON.stringify(scene)}`);
+            }
+            return {
+              id: scene.id,
+              name: scene.name,
+              description: scene.description || '',
+              icon: scene.icon,
+              is_default: false, // 设置为非默认,防止和现有冲突
+              sort_order: Number(scene.sortOrder) || 0,
+              created_at: Number(scene.createdAt) || Date.now(),
+              updated_at: Number(scene.updatedAt) || Date.now()
+            };
+          }),
+          sceneModes: config.modes.map((mode: any) => {
+            if (!mode.id || !mode.name || !mode.sceneId) {
+              throw new Error(`模式数据不完整: ${JSON.stringify(mode)}`);
+            }
+            return {
+              id: mode.id,
+              scene_id: mode.sceneId,
+              name: mode.name,
+              description: mode.description || '',
+              shortcut: mode.shortcut,
+              is_default: Boolean(mode.isDefault),
+              sort_order: Number(mode.sortOrder) || 0,
+              default_feedback: mode.defaultFeedback,
+              created_at: Number(mode.createdAt) || Date.now(),
+              updated_at: Number(mode.updatedAt) || Date.now()
+            };
+          }),
+          scenePrompts: config.prompts.map((prompt: any) => {
+            if (!prompt.sceneId || !prompt.modeId || typeof prompt.prompt !== 'string') {
+              throw new Error(`提示词数据不完整: ${JSON.stringify(prompt)}`);
+            }
+            return {
+              scene_id: prompt.sceneId,
+              mode_id: prompt.modeId,
+              prompt: prompt.prompt,
+              created_at: Date.now(),
+              updated_at: Date.now()
+            };
+          })
+        };
+
+        const result = this.promptManager.importSceneConfig(backendConfig);
 
         res.json({
           success: true,
-          message: `导入完成: 成功 ${result.success} 个, 失败 ${result.failed} 个`,
+          message: `场景配置导入完成: 成功 ${result.success} 个, 失败 ${result.failed} 个`,
           result: {
             success: result.success,
             failed: result.failed,
@@ -648,10 +522,704 @@ export class WebServer {
           }
         });
       } catch (error) {
-        logger.error('导入提示词失败:', error);
+        logger.error('导入场景配置失败:', error);
         res.status(500).json({
           success: false,
-          error: 'Failed to import prompts',
+          error: 'Failed to import scene config',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 获取场景详情
+    this.app.get('/api/scenes/:sceneId', (req, res) => {
+      try {
+        const { sceneId } = req.params;
+        const scene = this.promptManager.getSceneById(sceneId);
+        const modes = this.promptManager.getSceneModes(sceneId);
+        
+        if (!scene) {
+          res.status(404).json({
+            success: false,
+            error: 'Scene not found',
+            message: `未找到场景: ${sceneId}`
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          data: {
+            scene: this.convertSceneToFrontendFormat(scene),
+            modes: modes.map(mode => this.convertSceneModeToFrontendFormat(mode))
+          }
+        });
+      } catch (error) {
+        logger.error(`获取场景详情失败 (sceneId: ${req.params.sceneId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get scene details',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 创建新场景
+    this.app.post('/api/scenes', (req, res) => {
+      try {
+        const { name, description, icon, isDefault, sortOrder } = req.body;
+
+        if (!name || typeof name !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid scene name',
+            message: '场景名称不能为空'
+          });
+          return;
+        }
+
+        if (!description || typeof description !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid scene description',
+            message: '场景描述不能为空'
+          });
+          return;
+        }
+
+        // 直接构建SceneRequest对象，保持前端数据格式
+        const sceneRequest: SceneRequest = {
+          name,
+          description,
+          icon: icon || '📁',
+          isDefault: isDefault || false,
+          sortOrder: sortOrder || 999
+        };
+
+        logger.debug('创建场景请求数据:', sceneRequest);
+        const scene = this.promptManager.createScene(sceneRequest);
+
+        res.json({
+          success: true,
+          message: `场景已创建: ${name}`,
+          data: {
+            scene: this.convertSceneToFrontendFormat(scene)
+          }
+        });
+      } catch (error) {
+        logger.error('创建场景失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to create scene',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 更新场景
+    this.app.put('/api/scenes/:sceneId', (req, res) => {
+      try {
+        const { sceneId } = req.params;
+        const { name, description, isDefault, icon, sortOrder } = req.body;
+
+        // 构建场景更新请求对象
+        const sceneRequest: Partial<SceneRequest> = {};
+        
+        // 验证必要字段并添加到请求对象
+        if (name !== undefined) {
+          if (!name || typeof name !== 'string') {
+            res.status(400).json({
+              success: false,
+              error: 'Invalid scene name',
+              message: '场景名称不能为空'
+            });
+            return;
+          }
+          sceneRequest.name = name;
+        }
+        
+        if (description !== undefined) {
+          if (!description || typeof description !== 'string') {
+            res.status(400).json({
+              success: false,
+              error: 'Invalid scene description',
+              message: '场景描述不能为空'
+            });
+            return;
+          }
+          sceneRequest.description = description;
+        }
+        
+        // 添加可选字段
+        if (isDefault !== undefined) sceneRequest.isDefault = isDefault;
+        if (icon !== undefined) sceneRequest.icon = icon;
+        if (sortOrder !== undefined) sceneRequest.sortOrder = sortOrder;
+
+        const scene = this.promptManager.updateScene(sceneId, sceneRequest);
+
+        if (!scene) {
+          res.status(404).json({
+            success: false,
+            error: 'Scene not found',
+            message: `未找到场景: ${sceneId}`
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          message: `场景已更新: ${name}`,
+          data: {
+            scene: this.convertSceneToFrontendFormat(scene)
+          }
+        });
+      } catch (error) {
+        logger.error(`更新场景失败 (sceneId: ${req.params.sceneId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update scene',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 删除场景
+    this.app.delete('/api/scenes/:sceneId', (req, res) => {
+      try {
+        const { sceneId } = req.params;
+        const deleted = this.promptManager.deleteScene(sceneId);
+
+        if (!deleted) {
+          res.status(404).json({
+            success: false,
+            error: 'Scene not found',
+            message: `未找到场景: ${sceneId}`
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          message: `场景已删除: ${sceneId}`,
+          deleted: true
+        });
+      } catch (error) {
+        logger.error(`删除场景失败 (sceneId: ${req.params.sceneId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to delete scene',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 获取场景的所有模式
+    this.app.get('/api/scenes/:sceneId/modes', (req, res) => {
+      try {
+        const { sceneId } = req.params;
+        const modes = this.promptManager.getSceneModes(sceneId);
+
+        res.json({
+          success: true,
+          data: {
+            modes: modes.map(mode => this.convertSceneModeToFrontendFormat(mode)),
+            total: modes.length
+          }
+        });
+      } catch (error) {
+        logger.error(`获取场景模式失败 (sceneId: ${req.params.sceneId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get scene modes',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 为场景添加模式
+    this.app.post('/api/scenes/:sceneId/modes', (req, res) => {
+      try {
+        const { sceneId } = req.params;
+        const { name, description, shortcut, isDefault, sortOrder, defaultFeedback } = req.body;
+
+        if (!name || typeof name !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid mode name',
+            message: '模式名称不能为空'
+          });
+          return;
+        }
+
+        if (!description || typeof description !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid mode description',
+            message: '模式描述不能为空'
+          });
+          return;
+        }
+
+        // 构建完整的模式请求对象
+        const modeRequest: SceneModeRequest = {
+          name,
+          description,
+          shortcut: shortcut || '',
+          isDefault: isDefault || false,
+          sortOrder: sortOrder || 999,
+          defaultFeedback: defaultFeedback || ''
+        };
+
+        logger.debug('创建场景模式请求数据:', { sceneId, modeRequest });
+        const mode = this.promptManager.addSceneMode(sceneId, modeRequest);
+
+        res.json({
+          success: true,
+          message: `场景模式已添加: ${name}`,
+          data: {
+            mode: this.convertSceneModeToFrontendFormat(mode)
+          }
+        });
+      } catch (error) {
+        logger.error(`添加场景模式失败 (sceneId: ${req.params.sceneId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to add scene mode',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 更新场景模式
+    this.app.put('/api/scenes/:sceneId/modes/:modeId', (req, res) => {
+      try {
+        const { sceneId, modeId } = req.params;
+        const { name, description, shortcut, isDefault, sortOrder, defaultFeedback } = req.body;
+
+        if (!name || typeof name !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid mode name',
+            message: '模式名称不能为空'
+          });
+          return;
+        }
+
+        if (!description || typeof description !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid mode description',
+            message: '模式描述不能为空'
+          });
+          return;
+        }
+
+        // 构建完整的模式更新请求对象
+        const modeRequest: Partial<SceneModeRequest> = {
+          name,
+          description,
+          ...(shortcut !== undefined && { shortcut }),
+          ...(isDefault !== undefined && { isDefault }),
+          ...(sortOrder !== undefined && { sortOrder }),
+          ...(defaultFeedback !== undefined && { defaultFeedback })
+        };
+
+        logger.debug('更新场景模式请求数据:', { sceneId, modeId, modeRequest });
+        const mode = this.promptManager.updateSceneMode(sceneId, modeId, modeRequest);
+
+        if (!mode) {
+          res.status(404).json({
+            success: false,
+            error: 'Scene mode not found',
+            message: `未找到场景模式: ${sceneId}:${modeId}`
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          message: `场景模式已更新: ${name}`,
+          data: {
+            mode: this.convertSceneModeToFrontendFormat(mode)
+          }
+        });
+      } catch (error) {
+        logger.error(`更新场景模式失败 (sceneId: ${req.params.sceneId}, modeId: ${req.params.modeId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update scene mode',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 删除场景模式
+    this.app.delete('/api/scenes/:sceneId/modes/:modeId', (req, res) => {
+      try {
+        const { sceneId, modeId } = req.params;
+        const deleted = this.promptManager.deleteSceneMode(sceneId, modeId);
+
+        if (!deleted) {
+          res.status(404).json({
+            success: false,
+            error: 'Scene mode not found',
+            message: `未找到场景模式: ${sceneId}:${modeId}`
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          message: `场景模式已删除: ${sceneId}:${modeId}`,
+          deleted: true
+        });
+      } catch (error) {
+        logger.error(`删除场景模式失败 (sceneId: ${req.params.sceneId}, modeId: ${req.params.modeId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to delete scene mode',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 获取场景提示词
+    this.app.get('/api/scenes/:sceneId/modes/:modeId/prompt', (req, res) => {
+      try {
+        const { sceneId, modeId } = req.params;
+        const { type = 'current' } = req.query;
+
+        const result: any = {
+          success: true,
+          sceneId,
+          modeId
+        };
+
+        if (type === 'current') {
+          const currentPrompt = this.promptManager.getScenePrompt(sceneId, modeId);
+          if (currentPrompt) {
+            result.currentPrompt = {
+              content: currentPrompt
+            };
+          }
+        }
+
+        // 可以扩展支持获取自定义和默认提示词
+        res.json(result);
+      } catch (error) {
+        logger.error(`获取场景提示词失败 (scene: ${req.params.sceneId}, mode: ${req.params.modeId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get scene prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 保存场景提示词
+    this.app.post('/api/scenes/:sceneId/modes/:modeId/prompt', (req, res) => {
+      try {
+        const { sceneId, modeId } = req.params;
+        const { prompt } = req.body;
+
+        if (!prompt || typeof prompt !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid prompt content',
+            message: '提示词内容不能为空'
+          });
+          return;
+        }
+
+        this.promptManager.saveScenePrompt(sceneId, modeId, prompt);
+
+        res.json({
+          success: true,
+          message: `场景提示词已保存 (scene: ${sceneId}, mode: ${modeId})`,
+          sceneId,
+          modeId
+        });
+      } catch (error) {
+        logger.error(`保存场景提示词失败 (scene: ${req.params.sceneId}, mode: ${req.params.modeId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to save scene prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 删除场景提示词
+    this.app.delete('/api/scenes/:sceneId/modes/:modeId/prompt', (req, res) => {
+      try {
+        const { sceneId, modeId } = req.params;
+        const deleted = this.promptManager.deleteScenePrompt(sceneId, modeId);
+
+        res.json({
+          success: true,
+          message: deleted 
+            ? `场景提示词已删除 (scene: ${sceneId}, mode: ${modeId})`
+            : `未找到要删除的场景提示词 (scene: ${sceneId}, mode: ${modeId})`,
+          deleted
+        });
+      } catch (error) {
+        logger.error(`删除场景提示词失败 (scene: ${req.params.sceneId}, mode: ${req.params.modeId}):`, error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to delete scene prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 导出场景配置
+    this.app.get('/api/scenes/export', (req, res) => {
+      try {
+        const config = this.promptManager.exportSceneConfig();
+        
+        // 转换数据格式以匹配前端期望的SceneConfigExport格式
+        const exportData = {
+          version: '2.0',
+          exported_at: new Date().toISOString(),
+          config: {
+            version: '2.0',
+            exportedAt: Date.now(),
+            scenes: config.scenes.map(scene => ({
+              id: scene.id,
+              name: scene.name,
+              description: scene.description,
+              icon: scene.icon,
+              isDefault: scene.is_default,
+              sortOrder: scene.sort_order,
+              createdAt: scene.created_at,
+              updatedAt: scene.updated_at
+            })),
+            modes: config.sceneModes.map(mode => ({
+              id: mode.id,
+              sceneId: mode.scene_id,
+              name: mode.name,
+              description: mode.description,
+              shortcut: mode.shortcut,
+              isDefault: mode.is_default,
+              sortOrder: mode.sort_order,
+              defaultFeedback: mode.default_feedback,
+              createdAt: mode.created_at,
+              updatedAt: mode.updated_at
+            })),
+            prompts: config.scenePrompts.map(prompt => ({
+              sceneId: prompt.scene_id,
+              modeId: prompt.mode_id,
+              prompt: prompt.prompt
+            }))
+          }
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="scene-config-export-${Date.now()}.json"`);
+        res.json(exportData);
+      } catch (error) {
+        logger.error('导出场景配置失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to export scene config',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 导入场景配置
+    this.app.post('/api/scenes/import', (req, res) => {
+      try {
+        const { config } = req.body;
+
+        if (!config || typeof config !== 'object') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data',
+            message: '导入数据格式无效：缺少config对象'
+          });
+          return;
+        }
+
+        // 验证导入数据的基本结构
+        const validationErrors: string[] = [];
+        
+        if (!Array.isArray(config.scenes)) {
+          validationErrors.push('缺少scenes数组');
+        }
+        
+        if (!Array.isArray(config.modes)) {
+          validationErrors.push('缺少modes数组');  
+        }
+        
+        if (!Array.isArray(config.prompts)) {
+          validationErrors.push('缺少prompts数组');
+        }
+
+        if (validationErrors.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data structure',
+            message: `导入数据结构无效: ${validationErrors.join(', ')}`
+          });
+          return;
+        }
+
+        // 转换前端格式到后端格式
+        const backendConfig = {
+          scenes: config.scenes.map((scene: any) => ({
+            id: scene.id,
+            name: scene.name,
+            description: scene.description,
+            icon: scene.icon,
+            is_default: scene.isDefault || false,
+            sort_order: scene.sortOrder || 0,
+            created_at: scene.createdAt || Date.now(),
+            updated_at: scene.updatedAt || Date.now()
+          })),
+          sceneModes: config.modes.map((mode: any) => ({
+            id: mode.id,
+            scene_id: mode.sceneId,
+            name: mode.name,
+            description: mode.description,
+            shortcut: mode.shortcut,
+            is_default: mode.isDefault || false,
+            sort_order: mode.sortOrder || 0,
+            default_feedback: mode.defaultFeedback,
+            created_at: mode.createdAt || Date.now(),
+            updated_at: mode.updatedAt || Date.now()
+          })),
+          scenePrompts: config.prompts.map((prompt: any) => ({
+            scene_id: prompt.sceneId,
+            mode_id: prompt.modeId,
+            prompt: prompt.prompt,
+            created_at: Date.now(),
+            updated_at: Date.now()
+          }))
+        };
+
+        const result = this.promptManager.importSceneConfig(backendConfig);
+
+        res.json({
+          success: true,
+          message: `场景配置导入完成: 成功 ${result.success} 个, 失败 ${result.failed} 个`,
+          result: {
+            success: result.success,
+            failed: result.failed,
+            errors: result.errors
+          }
+        });
+      } catch (error) {
+        logger.error('导入场景配置失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to import scene config',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // ================== 兼容性API端点 ==================
+    
+    // 统一的提示词获取API（支持场景化和传统模式）
+    this.app.get('/api/unified/prompt', (req, res) => {
+      try {
+        const { scene, mode } = req.query;
+
+        if (!mode || typeof mode !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Mode parameter is required',
+            message: '缺少mode参数'
+          });
+          return;
+        }
+
+        let prompt: string | null = null;
+        let promptType: 'legacy' | 'scene' = 'legacy';
+
+        if (scene && typeof scene === 'string') {
+          // 场景化提示词
+          prompt = this.promptManager.getScenePrompt(scene, mode);
+          promptType = 'scene';
+        } else {
+          // 不支持传统模式，返回错误
+          res.status(400).json({
+            success: false,
+            error: 'Legacy mode not supported',
+            message: '传统模式已不支持，请使用场景化模式'
+          });
+          return;
+        }
+
+        // 如果没有找到提示词，返回空字符串而不是错误
+        // 这样前端可以显示空编辑器让用户开始编辑
+        const promptContent = prompt || '';
+        
+        if (!prompt) {
+          logger.info(`场景提示词为空，返回空内容供编辑 (scene: ${scene}, mode: ${mode})`);
+        }
+
+        res.json({
+          success: true,
+          data: {
+            prompt: promptContent
+          }
+        });
+      } catch (error) {
+        logger.error('获取统一提示词失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get unified prompt',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 保存提示词API（支持场景化模式）
+    this.app.post('/api/unified/prompt/apply', (req, res) => {
+      try {
+        const { scene, mode, prompt } = req.body;
+
+        if (!mode || typeof mode !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Mode parameter is required',
+            message: '缺少mode参数'
+          });
+          return;
+        }
+
+        if (!scene || typeof scene !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Scene parameter is required',
+            message: '缺少scene参数'
+          });
+          return;
+        }
+
+        if (!prompt || typeof prompt !== 'string') {
+          res.status(400).json({
+            success: false,
+            error: 'Prompt parameter is required',
+            message: '缺少prompt参数'
+          });
+          return;
+        }
+
+        // 保存场景化提示词
+        this.promptManager.saveScenePrompt(scene, mode, prompt);
+
+        res.json({
+          success: true,
+          message: `场景提示词已保存 (scene: ${scene}, mode: ${mode})`
+        });
+      } catch (error) {
+        logger.error('保存统一提示词失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to apply unified prompt',
           message: error instanceof Error ? error.message : 'Unknown error'
         });
       }
@@ -1237,6 +1805,40 @@ export class WebServer {
    */
   private generateSessionId(): string {
     return `feedback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * 转换后端Scene对象为前端期望的格式
+   */
+  private convertSceneToFrontendFormat(scene: any): any {
+    return {
+      id: scene.id,
+      name: scene.name,
+      description: scene.description,
+      icon: scene.icon,
+      isDefault: Boolean(scene.is_default),      // 下划线转驼峰，显式转换为布尔值
+      sortOrder: scene.sort_order,      // 下划线转驼峰
+      createdAt: scene.created_at,      // 下划线转驼峰
+      updatedAt: scene.updated_at       // 下划线转驼峰
+    };
+  }
+
+  /**
+   * 转换后端SceneMode对象为前端期望的格式
+   */
+  private convertSceneModeToFrontendFormat(mode: any): any {
+    return {
+      id: mode.id,
+      sceneId: mode.scene_id,           // 下划线转驼峰
+      name: mode.name,
+      description: mode.description,
+      shortcut: mode.shortcut,
+      isDefault: Boolean(mode.is_default),       // 下划线转驼峰，显式转换为布尔值
+      sortOrder: mode.sort_order,       // 下划线转驼峰
+      defaultFeedback: mode.default_feedback,   // 下划线转驼峰
+      createdAt: mode.created_at,       // 下划线转驼峰
+      updatedAt: mode.updated_at        // 下划线转驼峰
+    };
   }
 
   /**

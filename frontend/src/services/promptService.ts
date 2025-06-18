@@ -2,10 +2,22 @@
  * 提示词服务 - 封装与后端API的通信，实现SQLite+localStorage缓存策略
  */
 
+import type { 
+  Scene, 
+  SceneMode, 
+  CurrentSelection,
+  ScenesResponse,
+  SceneRequest,
+  SceneModeRequest,
+  SceneConfigExport 
+} from '../types/app'
+import errorHandler from './errorHandler'
+
 export interface PromptCacheItem {
   prompt: string;
   timestamp: number;
   mode: string;
+  sceneId?: string; // 添加场景ID支持
 }
 
 export interface ApiResponse<T = any> {
@@ -15,29 +27,307 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
+// 导入API专用响应类型
+export interface ImportApiResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  result?: {
+    success: number;
+    failed: number;
+    errors: string[];
+  };
+}
+
 export class PromptService {
   private readonly CACHE_PREFIX = 'mcp-prompt-cache';
   private readonly CACHE_DURATION = 30 * 60 * 1000; // 30分钟
-  private readonly API_BASE = '/api/prompts';
+  // 传统API_BASE已移除，统一使用场景化API
+  private readonly SCENES_API_BASE = '/api/scenes'; // 新增场景API基础路径
+  private readonly UNIFIED_API_BASE = '/api/unified'; // 新增统一API基础路径
+
+  // ===== 场景管理方法 =====
 
   /**
-   * 获取提示词 (优先缓存，回退API)
+   * 获取所有场景
    */
-  async getPrompt(mode: string): Promise<string> {
+  async getAllScenes(): Promise<Scene[]> {
+    try {
+      console.log('[PromptService] 获取所有场景');
+      const response = await fetch(this.SCENES_API_BASE);
+      
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ScenesResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '获取场景列表失败');
+      }
+
+      return result.data?.scenes || [];
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 获取场景详情（包含模式列表）
+   */
+  async getSceneDetails(sceneId: string): Promise<{ scene: Scene; modes: SceneMode[] }> {
+    try {
+      console.log(`[PromptService] 获取场景详情: ${sceneId}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}`);
+      
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '获取场景详情失败');
+      }
+
+      return {
+        scene: result.data?.scene || null,
+        modes: result.data?.modes || []
+      };
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 创建新场景
+   */
+  async createScene(sceneData: SceneRequest): Promise<Scene> {
+    try {
+      console.log('[PromptService] 创建新场景:', sceneData.name);
+      const response = await fetch(this.SCENES_API_BASE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sceneData),
+      });
+
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '创建场景失败');
+      }
+
+      return result.data?.scene;
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 更新场景
+   */
+  async updateScene(sceneId: string, sceneData: Partial<SceneRequest>): Promise<Scene> {
+    try {
+      console.log(`[PromptService] 更新场景: ${sceneId}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sceneData),
+      });
+
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '更新场景失败');
+      }
+
+      return result.data?.scene;
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 删除场景
+   */
+  async deleteScene(sceneId: string): Promise<void> {
+    try {
+      console.log(`[PromptService] 删除场景: ${sceneId}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '删除场景失败');
+      }
+
+      // 清理相关缓存
+      this.clearSceneCache(sceneId);
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  // ===== 场景模式管理方法 =====
+
+  /**
+   * 获取场景下的所有模式
+   */
+  async getSceneModes(sceneId: string): Promise<SceneMode[]> {
+    try {
+      console.log(`[PromptService] 获取场景模式: ${sceneId}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}/modes`);
+      
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '获取场景模式失败');
+      }
+
+      return result.data?.modes || [];
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 为场景添加新模式
+   */
+  async addSceneMode(sceneId: string, modeData: SceneModeRequest): Promise<SceneMode> {
+    try {
+      console.log(`[PromptService] 添加场景模式: ${sceneId}/${modeData.name}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}/modes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(modeData),
+      });
+
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '添加场景模式失败');
+      }
+
+      return result.data?.mode;
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 更新场景模式
+   */
+  async updateSceneMode(sceneId: string, modeId: string, modeData: Partial<SceneModeRequest>): Promise<SceneMode> {
+    try {
+      console.log(`[PromptService] 更新场景模式: ${sceneId}/${modeId}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}/modes/${modeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(modeData),
+      });
+
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '更新场景模式失败');
+      }
+
+      return result.data?.mode;
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  /**
+   * 删除场景模式
+   */
+  async deleteSceneMode(sceneId: string, modeId: string): Promise<void> {
+    try {
+      console.log(`[PromptService] 删除场景模式: ${sceneId}/${modeId}`);
+      const response = await fetch(`${this.SCENES_API_BASE}/${sceneId}/modes/${modeId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        await this.handleApiError(response);
+      }
+
+      const result: ApiResponse = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || result.message || '删除场景模式失败');
+      }
+
+      // 清理相关缓存
+      this.clearSceneModeCache(sceneId, modeId);
+    } catch (error) {
+      // 错误已在handleApiError中处理
+      throw error;
+    }
+  }
+
+  // ===== 统一提示词管理方法 =====
+
+  /**
+   * 获取提示词（统一API，支持场景化和传统模式）
+   */
+  async getUnifiedPrompt(selection: CurrentSelection): Promise<string> {
     try {
       // 首先检查缓存
-      const cached = this.getCachedPrompt(mode);
+      const cached = this.getCachedScenePrompt(selection.sceneId, selection.modeId);
       if (cached) {
-        console.log(`[PromptService] 使用缓存提示词: ${mode}`);
+        console.log(`[PromptService] 使用缓存提示词: ${selection.sceneId}/${selection.modeId}`);
         return cached;
       }
 
-      // 缓存未命中，调用API
-      console.log(`[PromptService] 从API获取提示词: ${mode}`);
-      const response = await fetch(`${this.API_BASE}/${mode}`);
+          // 缓存未命中，调用统一API
+    console.log(`[PromptService] 从统一API获取提示词: ${selection.sceneId}/${selection.modeId}`);
+    const response = await fetch(`${this.UNIFIED_API_BASE}/prompt?scene=${selection.sceneId}&mode=${selection.modeId}`);
       
       if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+        await this.handleApiError(response);
       }
 
       const result: ApiResponse = await response.json();
@@ -49,40 +339,43 @@ export class PromptService {
       const prompt = result.data?.prompt || '';
       
       // 更新缓存
-      this.setCachedPrompt(mode, prompt);
+      this.setCachedScenePrompt(selection.sceneId, selection.modeId, prompt);
       
       return prompt;
     } catch (error) {
-      console.error(`[PromptService] 获取提示词失败 (${mode}):`, error);
-      
       // 网络错误时尝试使用过期缓存
-      const expiredCache = this.getCachedPrompt(mode, true);
+      const expiredCache = this.getCachedScenePrompt(selection.sceneId, selection.modeId, true);
       if (expiredCache) {
-        console.warn(`[PromptService] 使用过期缓存: ${mode}`);
+        console.warn(`[PromptService] 使用过期缓存: ${selection.sceneId}/${selection.modeId}`);
         return expiredCache;
       }
       
+      // 错误已在handleApiError中处理
       throw error;
     }
   }
 
   /**
-   * 保存提示词 (API + 缓存同步)
+   * 保存提示词（统一API）
    */
-  async savePrompt(mode: string, prompt: string): Promise<void> {
+  async saveUnifiedPrompt(selection: CurrentSelection, prompt: string): Promise<void> {
     try {
-      console.log(`[PromptService] 保存提示词: ${mode}`);
+      console.log(`[PromptService] 保存统一提示词: ${selection.sceneId}/${selection.modeId}`);
       
-      const response = await fetch(`${this.API_BASE}/${mode}`, {
+      const response = await fetch(`${this.UNIFIED_API_BASE}/prompt/apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          scene: selection.sceneId,
+          mode: selection.modeId,
+          prompt 
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+        await this.handleApiError(response);
       }
 
       const result: ApiResponse = await response.json();
@@ -92,234 +385,307 @@ export class PromptService {
       }
 
       // 保存成功后更新缓存
-      this.setCachedPrompt(mode, prompt);
+      this.setCachedScenePrompt(selection.sceneId, selection.modeId, prompt);
       
-      console.log(`[PromptService] 提示词保存成功: ${mode}`);
+      console.log(`[PromptService] 统一提示词保存成功: ${selection.sceneId}/${selection.modeId}`);
     } catch (error) {
-      console.error(`[PromptService] 保存提示词失败 (${mode}):`, error);
+      // 错误已在handleApiError中处理
       throw error;
     }
   }
 
-  /**
-   * 删除提示词 (API + 缓存清理)
-   */
-  async deletePrompt(mode: string): Promise<void> {
-    try {
-      console.log(`[PromptService] 删除提示词: ${mode}`);
-      
-      const response = await fetch(`${this.API_BASE}/${mode}`, {
-        method: 'DELETE',
-      });
+  // ===== 配置导出导入方法 =====
 
+  /**
+   * 导出场景配置
+   */
+  async exportSceneConfig(): Promise<SceneConfigExport> {
+    try {
+      console.log('[PromptService] 导出场景配置');
+      const response = await fetch(`${this.SCENES_API_BASE}/export`);
+      
       if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+        await this.handleApiError(response);
       }
 
-      const result: ApiResponse = await response.json();
+      const result = await response.json();
       
-      if (!result.success) {
-        throw new Error(result.error || result.message || '删除提示词失败');
+      // 检查是否是包装在config字段中的响应格式
+      if (result.config) {
+        // SceneConfigExportResponse格式
+        const config = result.config;
+        return {
+          version: config.version || '2.0',
+          exportedAt: config.exportedAt || Date.now(),
+          scenes: config.scenes || [],
+          modes: config.modes || [],
+          prompts: config.prompts || []
+        };
+      } else if (result.version && result.scenes) {
+        // 直接的SceneConfigExport格式
+        return {
+          version: result.version || '2.0',
+          exportedAt: result.exportedAt || Date.now(),
+          scenes: result.scenes || [],
+          modes: result.modes || [],
+          prompts: result.prompts || []
+        };
+      } else {
+        console.warn('[PromptService] 导出响应格式不匹配，返回空配置');
+        return { 
+          version: '2.0',
+          exportedAt: Date.now(),
+          scenes: [], 
+          modes: [], 
+          prompts: [] 
+        };
       }
-
-      // 删除成功后清理缓存
-      this.clearCachedPrompt(mode);
-      
-      console.log(`[PromptService] 提示词删除成功: ${mode}`);
     } catch (error) {
-      console.error(`[PromptService] 删除提示词失败 (${mode}):`, error);
+      console.error('[PromptService] 导出场景配置失败:', error);
+      // 错误已在handleApiError中处理
       throw error;
     }
   }
 
   /**
-   * 验证提示词
+   * 导入场景配置
    */
-  async validatePrompt(mode: string, prompt: string): Promise<{ isValid: boolean; errors: string[]; warnings: string[] }> {
+  async importSceneConfig(config: SceneConfigExport): Promise<void> {
     try {
-      const response = await fetch(`${this.API_BASE}/${mode}/validate`, {
+      console.log('[PromptService] 导入场景配置');
+      
+      // 客户端验证
+      if (!config || typeof config !== 'object') {
+        throw new Error('导入数据无效：配置对象为空');
+      }
+      
+      if (!Array.isArray(config.scenes) || !Array.isArray(config.modes) || !Array.isArray(config.prompts)) {
+        throw new Error('导入数据格式错误：缺少必要的数据数组');
+      }
+      
+      const response = await fetch(`${this.SCENES_API_BASE}/import`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ config }),
       });
 
       if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+        await this.handleApiError(response);
       }
 
-      const result: ApiResponse = await response.json();
+      const result: ImportApiResponse = await response.json();
       
       if (!result.success) {
-        throw new Error(result.error || result.message || '验证提示词失败');
+        // 提供更详细的错误信息
+        let errorMessage = '导入场景配置失败';
+        
+        if (result.result && result.result.errors && Array.isArray(result.result.errors)) {
+          errorMessage += `:\n${result.result.errors.join('\n')}`;
+        } else if (result.error) {
+          errorMessage += `: ${result.error}`;
+        } else if (result.message) {
+          errorMessage += `: ${result.message}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      return result.data?.validation || { isValid: false, errors: ['验证失败'], warnings: [] };
+      // 导入成功后清理所有缓存
+      this.clearAllSceneCache();
+      
+      // 记录导入统计信息
+      if (result.result) {
+        console.log(`[PromptService] 场景配置导入完成: 成功 ${result.result.success} 个, 失败 ${result.result.failed} 个`);
+        if (result.result.errors && result.result.errors.length > 0) {
+          console.warn('[PromptService] 导入过程中的错误:', result.result.errors);
+          
+          // 如果有错误但导入成功了一些项目，给用户提示
+          if (result.result.success > 0) {
+            console.info(`[PromptService] 部分导入成功，建议检查导入结果`);
+          }
+        }
+      } else {
+        console.log('[PromptService] 场景配置导入成功');
+      }
     } catch (error) {
-      console.error(`[PromptService] 验证提示词失败 (${mode}):`, error);
+      console.error('[PromptService] 导入场景配置失败:', error);
+      // 错误已在handleApiError中处理
       throw error;
     }
   }
 
-  /**
-   * 重置到默认提示词
-   */
-  async resetToDefault(mode: string): Promise<void> {
-    try {
-      console.log(`[PromptService] 重置到默认提示词: ${mode}`);
-      
-      const response = await fetch(`${this.API_BASE}/${mode}/reset`, {
-        method: 'POST',
-      });
+  // 传统模式API已移除，统一使用场景化API (getUnifiedPrompt/saveUnifiedPrompt)
 
-      if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
-      }
+  // 传统API方法已移除，统一使用场景化API
 
-      const result: ApiResponse = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || result.message || '重置提示词失败');
-      }
+  // 传统缓存方法已移除，统一使用场景化缓存
 
-      // 重置成功后清理缓存，强制重新获取
-      this.clearCachedPrompt(mode);
-      
-      console.log(`[PromptService] 提示词重置成功: ${mode}`);
-    } catch (error) {
-      console.error(`[PromptService] 重置提示词失败 (${mode}):`, error);
-      throw error;
-    }
-  }
+  // 传统缓存管理方法已移除，统一使用场景化缓存
+
+  // ===== 场景化缓存管理方法 =====
 
   /**
-   * 获取缓存的提示词
+   * 获取场景化缓存的提示词
    */
-  private getCachedPrompt(mode: string, ignoreExpiry = false): string | null {
+  private getCachedScenePrompt(sceneId: string, modeId: string, ignoreExpiry = false): string | null {
     try {
-      const cacheKey = `${this.CACHE_PREFIX}-${mode}`;
+      const cacheKey = `${this.CACHE_PREFIX}-scene-${sceneId}-${modeId}`;
       const cached = localStorage.getItem(cacheKey);
       
       if (!cached) {
         return null;
       }
 
-      const cacheItem: PromptCacheItem = JSON.parse(cached);
+      const cachedItem: PromptCacheItem = JSON.parse(cached);
       
-      // 检查缓存是否过期
-      if (!ignoreExpiry && Date.now() - cacheItem.timestamp > this.CACHE_DURATION) {
-        this.clearCachedPrompt(mode);
+      // 检查是否过期
+      if (!ignoreExpiry && Date.now() - cachedItem.timestamp > this.CACHE_DURATION) {
         return null;
       }
 
-      return cacheItem.prompt;
+      return cachedItem.prompt;
     } catch (error) {
-      console.error(`[PromptService] 读取缓存失败 (${mode}):`, error);
-      this.clearCachedPrompt(mode);
+      console.warn(`[PromptService] 读取场景缓存失败 (${sceneId}/${modeId}):`, error);
       return null;
     }
   }
 
   /**
-   * 设置缓存的提示词
+   * 设置场景化缓存的提示词
    */
-  private setCachedPrompt(mode: string, prompt: string): void {
+  private setCachedScenePrompt(sceneId: string, modeId: string, prompt: string): void {
     try {
-      const cacheKey = `${this.CACHE_PREFIX}-${mode}`;
+      const cacheKey = `${this.CACHE_PREFIX}-scene-${sceneId}-${modeId}`;
       const cacheItem: PromptCacheItem = {
         prompt,
         timestamp: Date.now(),
-        mode,
+        mode: modeId,
+        sceneId
       };
-      
+
       localStorage.setItem(cacheKey, JSON.stringify(cacheItem));
-      console.log(`[PromptService] 缓存已更新: ${mode}`);
     } catch (error) {
-      console.error(`[PromptService] 设置缓存失败 (${mode}):`, error);
+      console.warn(`[PromptService] 设置场景缓存失败 (${sceneId}/${modeId}):`, error);
     }
   }
 
   /**
-   * 清理缓存的提示词
+   * 清除指定场景的所有缓存
    */
-  private clearCachedPrompt(mode: string): void {
+  private clearSceneCache(sceneId: string): void {
     try {
-      const cacheKey = `${this.CACHE_PREFIX}-${mode}`;
+      const keys = Object.keys(localStorage).filter(key => 
+        key.startsWith(`${this.CACHE_PREFIX}-scene-${sceneId}-`)
+      );
+      
+      keys.forEach(key => localStorage.removeItem(key));
+      
+      console.log(`[PromptService] 已清除场景缓存: ${sceneId} (${keys.length}个条目)`);
+    } catch (error) {
+      console.warn(`[PromptService] 清除场景缓存失败 (${sceneId}):`, error);
+    }
+  }
+
+  /**
+   * 清除指定场景模式的缓存
+   */
+  private clearSceneModeCache(sceneId: string, modeId: string): void {
+    try {
+      const cacheKey = `${this.CACHE_PREFIX}-scene-${sceneId}-${modeId}`;
       localStorage.removeItem(cacheKey);
-      console.log(`[PromptService] 缓存已清理: ${mode}`);
+      
+      console.log(`[PromptService] 已清除场景模式缓存: ${sceneId}/${modeId}`);
     } catch (error) {
-      console.error(`[PromptService] 清理缓存失败 (${mode}):`, error);
+      console.warn(`[PromptService] 清除场景模式缓存失败 (${sceneId}/${modeId}):`, error);
     }
   }
 
   /**
-   * 清理所有过期缓存
+   * 清除所有场景化缓存
    */
-  clearExpiredCache(): void {
+  private clearAllSceneCache(): void {
     try {
-      const keys = Object.keys(localStorage);
-      const expiredKeys = keys.filter(key => {
-        if (!key.startsWith(this.CACHE_PREFIX)) {
-          return false;
-        }
-
-        try {
-          const cached = localStorage.getItem(key);
-          if (!cached) return true;
-
-          const cacheItem: PromptCacheItem = JSON.parse(cached);
-          return Date.now() - cacheItem.timestamp > this.CACHE_DURATION;
-        } catch {
-          return true; // 解析失败的缓存也清理掉
-        }
-      });
-
-      expiredKeys.forEach(key => localStorage.removeItem(key));
+      const keys = Object.keys(localStorage).filter(key => 
+        key.startsWith(`${this.CACHE_PREFIX}-scene-`)
+      );
       
-      if (expiredKeys.length > 0) {
-        console.log(`[PromptService] 已清理 ${expiredKeys.length} 个过期缓存`);
-      }
+      keys.forEach(key => localStorage.removeItem(key));
+      
+      console.log(`[PromptService] 已清除所有场景缓存 (${keys.length}个条目)`);
     } catch (error) {
-      console.error('[PromptService] 清理过期缓存失败:', error);
+      console.warn('[PromptService] 清除所有场景缓存失败:', error);
     }
   }
 
   /**
-   * 获取缓存统计信息
+   * 获取场景化缓存统计信息
    */
-  getCacheStats(): { total: number; modes: string[]; oldestTimestamp: number | null } {
-    try {
-      const keys = Object.keys(localStorage);
-      const cacheKeys = keys.filter(key => key.startsWith(this.CACHE_PREFIX));
-      
-      const modes: string[] = [];
-      let oldestTimestamp: number | null = null;
-
-      cacheKeys.forEach(key => {
-        try {
-          const cached = localStorage.getItem(key);
-          if (cached) {
-            const cacheItem: PromptCacheItem = JSON.parse(cached);
-            modes.push(cacheItem.mode);
-            
-            if (oldestTimestamp === null || cacheItem.timestamp < oldestTimestamp) {
-              oldestTimestamp = cacheItem.timestamp;
-            }
+  getSceneCacheStats(): { total: number; scenes: string[]; modes: string[]; oldestTimestamp: number | null } {
+    const keys = Object.keys(localStorage).filter(key => key.startsWith(`${this.CACHE_PREFIX}-scene-`));
+    const scenes = new Set<string>();
+    const modes = new Set<string>();
+    
+    let oldestTimestamp: number | null = null;
+    
+    keys.forEach(key => {
+      try {
+        const cached = JSON.parse(localStorage.getItem(key) || '{}');
+        if (cached.sceneId) scenes.add(cached.sceneId);
+        if (cached.mode) modes.add(cached.mode);
+        
+        if (cached.timestamp) {
+          if (oldestTimestamp === null || cached.timestamp < oldestTimestamp) {
+            oldestTimestamp = cached.timestamp;
           }
-        } catch {
-          // 忽略解析失败的缓存
         }
-      });
+      } catch (error) {
+        // 忽略解析错误
+      }
+    });
+    
+    return {
+      total: keys.length,
+      scenes: Array.from(scenes),
+      modes: Array.from(modes),
+      oldestTimestamp
+    };
+  }
 
-      return {
-        total: cacheKeys.length,
-        modes,
-        oldestTimestamp,
-      };
-    } catch (error) {
-      console.error('[PromptService] 获取缓存统计失败:', error);
-      return { total: 0, modes: [], oldestTimestamp: null };
+  /**
+   * 统一处理API错误响应
+   */
+  private async handleApiError(response: Response): Promise<never> {
+    try {
+      // 尝试解析响应体获取详细错误信息
+      const errorData = await response.json();
+      const errorMessage = errorData.message || errorData.error || `API请求失败: ${response.status} ${response.statusText}`;
+      
+      // 使用全局错误处理器显示错误
+      errorHandler.showApiError({
+        message: errorMessage,
+        status: response.status,
+        code: errorData.error
+      });
+      
+      throw new Error(errorMessage);
+    } catch (parseError) {
+      // 如果解析响应体失败，使用通用错误信息
+      const fallbackMessage = `API请求失败: ${response.status} ${response.statusText}`;
+      
+      if (parseError instanceof Error && parseError.message !== fallbackMessage) {
+        // 重新抛出已经处理过的错误
+        throw parseError;
+      }
+      
+      // 显示通用错误信息
+      errorHandler.showApiError({
+        message: fallbackMessage,
+        status: response.status
+      });
+      
+      throw new Error(fallbackMessage);
     }
   }
 }

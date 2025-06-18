@@ -11,6 +11,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { displayConfig, getConfig } from './config/index.js';
 import { MCPServer } from './server/mcp-server.js';
+import { WebServer } from './server/web-server.js';
 import { StdioServerLauncher } from './server/stdio-server-launcher.js';
 import { MCPError, TransportMode } from './types/index.js';
 import { ClientIdentifier } from './utils/client-identifier.js';
@@ -182,6 +183,67 @@ async function startMCPServer(options: {
 }
 
 /**
+ * 启动开发模式服务器（固定端口）
+ */
+async function startDevServer(): Promise<void> {
+  try {
+    showWelcome();
+    console.log('🚀 启动开发模式服务器 (固定端口: 10050)...\n');
+    
+    // 加载配置
+    const config = getConfig();
+    config.transportMode = TransportMode.MCP;
+    
+    // 设置调试日志
+    logger.setLevel('debug');
+    logger.enableFileLogging();
+    
+    // 创建带固定端口的WebServer实例
+    const webServer = new WebServer(config, 10050);
+    
+    // 创建并启动服务器
+    const server = new MCPServer(config, webServer);
+    await server.startWebOnly();
+    
+    console.log('✅ 开发服务器已启动');
+    console.log(`🌐 Web界面: http://localhost:10050`);
+    console.log(`🔗 API端点: http://localhost:10050/api`);
+    console.log('📝 前端代理已配置到此端口\n');
+    console.log('💡 提示: 在另一个终端运行 "npm run dev:frontend" 启动前端开发服务器');
+    console.log('🛑 按 Ctrl+C 停止服务器\n');
+    
+    // 保持进程运行
+    process.stdin.resume();
+    
+    // 处理优雅关闭
+    process.on('SIGINT', async () => {
+      console.log('\n🛑 收到停止信号，正在关闭开发服务器...');
+      await server.stop();
+      console.log('✅ 开发服务器已停止');
+      process.exit(0);
+    });
+    
+    process.on('SIGTERM', async () => {
+      console.log('\n🛑 收到终止信号，正在关闭开发服务器...');
+      await server.stop();
+      console.log('✅ 开发服务器已停止');
+      process.exit(0);
+    });
+    
+  } catch (error) {
+    if (error instanceof MCPError) {
+      console.error(`❌ 开发服务器启动失败 [${error.code}]: ${error.message}`);
+    } else if (error instanceof Error) {
+      console.error('❌ 开发服务器启动失败:', error.message);
+      logger.debug('错误堆栈:', error.stack);
+    } else {
+      console.error('❌ 未知错误:', error);
+    }
+    process.exit(1);
+  }
+}
+
+/**
  * 显示健康检查信息
  */
 async function healthCheck(): Promise<void> {
@@ -217,6 +279,12 @@ program
   .option('-m, --mode <mode>', '指定传输模式 (stdio|mcp)', 'stdio')
   .option('--persistent', '持久运行模式，不自动退出')
   .action(startMCPServer);
+
+// 开发模式命令 - 固定端口启动
+program
+  .command('dev')
+  .description('启动开发模式服务器（固定端口10050，用于前端开发）')
+  .action(startDevServer);
 
 // 健康检查命令
 program

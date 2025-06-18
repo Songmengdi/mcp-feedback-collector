@@ -8,7 +8,7 @@
           :class="['toast', `toast-${message.type}`]"
           @click="removeMessage(message.id)"
         >
-          <div class="toast-icon">{{ getStatusIcon(message.type) }}</div>
+          <component :is="getStatusIcon(message.type)" class="toast-icon" />
           <div class="toast-content">
             <div class="toast-message">{{ message.text }}</div>
           </div>
@@ -22,6 +22,12 @@
 <script setup lang="ts">
 import { provide, ref } from 'vue'
 import type { MessageType } from '../types/app'
+import { 
+  CheckCircleIconSolid,
+  XCircleIconSolid,
+  ExclamationTriangleIconSolid,
+  InformationCircleIconSolid 
+} from '../components/icons'
 
 // 消息接口
 interface ToastMessage {
@@ -90,12 +96,12 @@ const clearAllMessages = () => {
 }
 
 // 获取状态图标
-const getStatusIcon = (type: MessageType): string => {
+const getStatusIcon = (type: MessageType) => {
   const icons = {
-    success: '✅',
-    error: '❌',
-    warning: '⚠️',
-    info: 'ℹ️'
+    success: CheckCircleIconSolid,
+    error: XCircleIconSolid,
+    warning: ExclamationTriangleIconSolid,
+    info: InformationCircleIconSolid
   }
   return icons[type]
 }
@@ -161,7 +167,8 @@ defineExpose({
 }
 
 .toast-icon {
-  font-size: 16px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 

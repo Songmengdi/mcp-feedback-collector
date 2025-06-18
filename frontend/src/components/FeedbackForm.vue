@@ -6,17 +6,21 @@
         您的反馈
       </div>
     </div>
-    <div class="feedback-body">
+    <div class="feedback-body" ref="feedbackBodyRef">
       <form @submit.prevent="handleSubmit">
-        <div class="form-group">
+        <div class="form-group textarea-group">
           <label class="form-label">反馈内容</label>
           <textarea
+            ref="textareaRef"
             v-model="feedbackText"
             class="form-textarea"
             :placeholder="placeholderText"
+            :style="{ height: textareaHeight }"
             @paste="handlePaste"
           ></textarea>
+        </div>
 
+        <div class="form-group phrase-mode-group">
           <!-- 快捷语选项 -->
           <PhraseModeSelector />
         </div>
@@ -55,9 +59,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import socketService from '../services/socket'
 import promptService from '../services/promptService'
+import shortcutService from '../services/shortcutService'
 import { useAppStore } from '../stores/app'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
+import { useScenesStore } from '../stores/scenes'
 import type { ImageFile } from '../types/app'
 import ImageUpload from './ImageUpload.vue'
 import PhraseModeSelector from './PhraseModeSelector.vue'
@@ -66,10 +72,14 @@ import PhraseModeSelector from './PhraseModeSelector.vue'
 const feedbackStore = useFeedbackStore()
 const connectionStore = useConnectionStore()
 const appStore = useAppStore()
+const scenesStore = useScenesStore()
 
 // 本地状态
 const feedbackText = ref('')
 const isSubmitting = ref(false)
+const textareaHeight = ref('120px') // 动态计算的textarea高度
+const feedbackBodyRef = ref<HTMLElement>()
+const textareaRef = ref<HTMLTextAreaElement>()
 
 // 计算属性
 const shortcutText = computed(() => {
@@ -123,8 +133,9 @@ const applyQuickPhraseToFeedback = async (text: string): Promise<string> => {
 // 获取自定义快捷语
 const getCustomQuickPhrase = async (): Promise<string> => {
   try {
-    // 优先从API获取（包含缓存逻辑）
-    const prompt = await promptService.getPrompt(appStore.currentPhraseMode)
+    // 使用场景化API获取提示词
+    const selection = { sceneId: appStore.currentSelection.sceneId, modeId: appStore.currentSelection.modeId }
+    const prompt = await promptService.getUnifiedPrompt(selection)
     return prompt || appStore.defaultPhrases[appStore.currentPhraseMode]
   } catch (error) {
     console.error('获取提示词失败，使用默认提示词:', error)
@@ -133,14 +144,9 @@ const getCustomQuickPhrase = async (): Promise<string> => {
   }
 }
 
-// 获取默认反馈内容
+// 获取默认反馈内容 - 重构为使用快捷键服务
 const getDefaultFeedback = (): string => {
-  const defaultFeedbacks = {
-    discuss: '对之前的所有过程,做一个整体的总结性的归纳,并且明确最近一段时间我们的核心聚焦点是什么,思考接下来我们需要做什么',
-    edit: '根据之前步骤及需求,完成编码',
-    search: '深入研究相关代码'
-  }
-  return defaultFeedbacks[appStore.currentPhraseMode as keyof typeof defaultFeedbacks] || ''
+  return shortcutService.getCurrentModeDefaultFeedback()
 }
 
 // 表单提交处理
@@ -299,71 +305,162 @@ const showStatusMessage = (type: string, message: string) => {
   // TODO: 集成StatusMessage组件
 }
 
-// 快捷键处理
+// 动态计算textarea高度
+const calculateTextareaHeight = () => {
+  if (!feedbackBodyRef.value) return
+
+  try {
+    const container = feedbackBodyRef.value
+    const containerHeight = container.clientHeight
+    
+    // 计算其他组件的高度
+    const formLabel = container.querySelector('.form-label') as HTMLElement
+    const phraseModeGroup = container.querySelector('.phrase-mode-group') as HTMLElement
+    const imageUploadGroup = container.querySelector('.form-group:nth-child(3)') as HTMLElement // 图片上传组
+    const buttonGroup = container.querySelector('.button-group') as HTMLElement
+    
+    let usedHeight = 0
+    
+    // 计算已使用的高度
+    if (formLabel) usedHeight += formLabel.offsetHeight + 8 // label + margin
+    if (phraseModeGroup) usedHeight += phraseModeGroup.offsetHeight + 12 // phrase-mode + margin
+    if (imageUploadGroup) usedHeight += imageUploadGroup.offsetHeight + 12 // image-upload + margin
+    if (buttonGroup) usedHeight += buttonGroup.offsetHeight + 8 // button-group + margin
+    
+    // 计算剩余可用高度
+    const availableHeight = containerHeight - usedHeight
+    const minHeight = 120 // 最小高度
+    
+    // 使用剩余高度，但不小于最小高度
+    const calculatedHeight = Math.max(availableHeight, minHeight)
+    
+    textareaHeight.value = `${calculatedHeight - 30}px` // 减去30px，进行高度冗余
+  } catch (error) {
+    console.warn('高度计算失败，使用默认高度:', error)
+    textareaHeight.value = '120px'
+  }
+}
+
+// 防抖函数
+const debounce = (func: Function, wait: number) => {
+  let timeout: number
+  return (...args: any[]) => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => func.apply(null, args), wait)
+  }
+}
+
+// 防抖的高度计算函数
+const debouncedCalculateHeight = debounce(calculateTextareaHeight, 100)
+
+// 快捷键处理 - 只处理表单相关的快捷键，模式切换由shortcutService统一处理
 const handleKeydown = (e: KeyboardEvent) => {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
   const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey
   
-  // 检查是否按下了 Cmd+Enter (Mac) 或 Ctrl+Enter (Windows)
-  const isSubmitShortcut = isCtrlOrCmd && e.key === 'Enter'
+  // 检查当前焦点是否在反馈表单区域内
+  const activeElement = document.activeElement
+  const formElement = document.querySelector('.feedback-card')
+  const isInForm = formElement && formElement.contains(activeElement)
   
-  if (isSubmitShortcut) {
-    // 检查当前焦点是否在反馈表单区域内
-    const activeElement = document.activeElement
-    const formElement = document.querySelector('.feedback-card')
-    
-    // 如果焦点在表单内，触发提交
-    if (formElement && formElement.contains(activeElement)) {
-      e.preventDefault()
-      handleSubmit()
-    }
-    return
+  if (!isInForm) {
+    return // 不在表单内，不处理任何快捷键
   }
   
-  // 检查反馈模式切换快捷键 (Ctrl/Cmd + 1/2/3)
-  if (isCtrlOrCmd && ['1', '2', '3'].includes(e.key)) {
+  // 检查是否按下了 Cmd+Enter (Mac) 或 Ctrl+Enter (Windows) - 提交表单
+  if (isCtrlOrCmd && e.key === 'Enter') {
     e.preventDefault()
-    
-    const modeMap = {
-      '1': 'discuss',
-      '2': 'edit', 
-      '3': 'search'
-    }
-    
-    const targetMode = modeMap[e.key as '1' | '2' | '3']
-    if (targetMode) {
-      appStore.setCurrentPhraseMode(targetMode)
-    }
+    handleSubmit()
     return
   }
   
   // 检查清空表单快捷键 (Ctrl/Cmd + Backspace)
   if (isCtrlOrCmd && e.key === 'Backspace') {
-    // 检查当前焦点是否在反馈表单区域内
-    const activeElement = document.activeElement
-    const formElement = document.querySelector('.feedback-card')
-    
-    // 如果焦点在表单内，触发清空
-    if (formElement && formElement.contains(activeElement)) {
-      e.preventDefault()
-      clearForm()
-    }
+    e.preventDefault()
+    clearForm()
+    return
   }
+  
+  // 所有其他快捷键（包括数字键模式切换）由 shortcutService 统一处理
+  // 这里不再拦截任何其他按键事件
 }
 
 // 生命周期
 onMounted(() => {
+  // 初始化快捷键服务
+  shortcutService.init()
+  
+  // 监听场景模式变化，更新快捷键绑定
+  const updateShortcutBindings = () => {
+    if (scenesStore.hasModes && scenesStore.currentSceneModes.length > 0) {
+      shortcutService.updateBindings(scenesStore.currentSceneModes)
+    }
+  }
+  
+  // 等待场景数据加载完成后再初始化快捷键绑定
+  const initializeShortcuts = async () => {
+    // 如果场景数据已经加载，直接更新
+    if (scenesStore.hasModes && scenesStore.currentSceneModes.length > 0) {
+      updateShortcutBindings()
+    } else {
+      // 否则等待数据加载
+      // 监听场景数据变化
+      const unsubscribe = scenesStore.$subscribe((_, state) => {
+        if (state.currentSceneModes.length > 0) {
+          updateShortcutBindings()
+          unsubscribe() // 只需要初始化一次
+        }
+      })
+    }
+  }
+  
+  // 初始化快捷键绑定
+  initializeShortcuts()
+  
+  // 监听后续的模式变化
+  scenesStore.$subscribe(() => {
+    updateShortcutBindings()
+  })
+  
   document.addEventListener('keydown', handleKeydown)
+  
+  // 添加窗口尺寸变化监听
+  window.addEventListener('resize', debouncedCalculateHeight)
+  
+  // 添加容器尺寸变化监听
+  let resizeObserver: ResizeObserver | null = null
+  if (feedbackBodyRef.value && 'ResizeObserver' in window) {
+    resizeObserver = new ResizeObserver(debouncedCalculateHeight)
+    resizeObserver.observe(feedbackBodyRef.value)
+  }
+  
   nextTick(() => {
     const textarea = document.querySelector('.form-textarea') as HTMLTextAreaElement
     if (textarea) {
       textarea.focus()
     }
+    
+    // 初始计算高度
+    setTimeout(calculateTextareaHeight, 100)
   })
+  
+  // 保存resizeObserver引用用于清理
+  ;(window as any)._feedbackResizeObserver = resizeObserver
 })
 
 onUnmounted(() => {
+  // 销毁快捷键服务
+  shortcutService.destroy()
+  
   document.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', debouncedCalculateHeight)
+  
+  // 清理ResizeObserver
+  const resizeObserver = (window as any)._feedbackResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    delete (window as any)._feedbackResizeObserver
+  }
 })
 </script>
 
@@ -374,9 +471,11 @@ onUnmounted(() => {
   border: 1px solid #3e3e42;
   border-radius: 6px;
   padding: 20px;
-  height: 100%;
+  flex: 1; /* 占据剩余空间 */
   display: flex;
   flex-direction: column;
+  min-height: 0; /* 允许收缩 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 .feedback-header {
@@ -395,11 +494,24 @@ onUnmounted(() => {
 
 .feedback-body {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto; 
+  min-height: 0; /* 确保可以收缩 */
+  display: flex;
+  flex-direction: column;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 12px; /* 减少间距 */
+}
+
+.form-group:last-child {
+  margin-bottom: 0; /* 最后一个组件无下边距 */
+  flex-shrink: 0; /* 按钮组不被压缩 */
+}
+
+/* PhraseModeSelector所在的form-group也不应被压缩 */
+.form-group.phrase-mode-group {
+  flex-shrink: 0;
 }
 
 .form-label {
@@ -408,6 +520,13 @@ onUnmounted(() => {
   font-size: 14px;
   margin-bottom: 8px;
   font-weight: 500;
+}
+
+.textarea-group {
+  flex: 1; /* 让包含textarea的组占据剩余空间 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .form-textarea {
@@ -419,9 +538,10 @@ onUnmounted(() => {
   color: #cccccc;
   font-size: 14px;
   font-family: inherit;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, height 0.2s ease;
   resize: none;
-  min-height: 200px;
+  /* 移除flex和固定高度限制，使用动态绑定的height */
+  min-height: 120px; /* 保留最小高度作为fallback */
 }
 
 .form-textarea:focus {
@@ -434,6 +554,8 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+  flex-shrink: 0; /* 确保按钮组不被压缩 */
+  margin-top: 8px; /* 添加上边距 */
 }
 
 .btn {

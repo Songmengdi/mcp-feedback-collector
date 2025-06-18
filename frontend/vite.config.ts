@@ -22,15 +22,15 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 代理Socket.IO请求
+      // 代理Socket.IO请求到开发服务器
       '/socket.io': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:10050',
         changeOrigin: true,
         ws: true
       },
-      // 代理API请求
+      // 代理API请求到开发服务器
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:10050',
         changeOrigin: true
       },
     }
