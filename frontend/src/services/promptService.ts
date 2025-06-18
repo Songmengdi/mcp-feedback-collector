@@ -41,7 +41,6 @@ export interface ImportApiResponse {
 
 export class PromptService {
   private readonly CACHE_PREFIX = 'mcp-prompt-cache';
-  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30分钟
   // 传统API_BASE已移除，统一使用场景化API
   private readonly SCENES_API_BASE = '/api/scenes'; // 新增场景API基础路径
   private readonly UNIFIED_API_BASE = '/api/unified'; // 新增统一API基础路径
@@ -502,41 +501,8 @@ export class PromptService {
     }
   }
 
-  // 传统模式API已移除，统一使用场景化API (getUnifiedPrompt/saveUnifiedPrompt)
-
-  // 传统API方法已移除，统一使用场景化API
-
-  // 传统缓存方法已移除，统一使用场景化缓存
-
-  // 传统缓存管理方法已移除，统一使用场景化缓存
-
   // ===== 场景化缓存管理方法 =====
 
-  /**
-   * 获取场景化缓存的提示词
-   */
-  private getCachedScenePrompt(sceneId: string, modeId: string, ignoreExpiry = false): string | null {
-    try {
-      const cacheKey = `${this.CACHE_PREFIX}-scene-${sceneId}-${modeId}`;
-      const cached = localStorage.getItem(cacheKey);
-      
-      if (!cached) {
-        return null;
-      }
-
-      const cachedItem: PromptCacheItem = JSON.parse(cached);
-      
-      // 检查是否过期
-      if (!ignoreExpiry && Date.now() - cachedItem.timestamp > this.CACHE_DURATION) {
-        return null;
-      }
-
-      return cachedItem.prompt;
-    } catch (error) {
-      console.warn(`[PromptService] 读取场景缓存失败 (${sceneId}/${modeId}):`, error);
-      return null;
-    }
-  }
 
   /**
    * 设置场景化缓存的提示词

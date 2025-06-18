@@ -107,13 +107,10 @@ class ShortcutService {
       modeId: mode.id
     }
     
-    // 更新 appStore 状态
-    appStore.setCurrentSelection(newSelection)
-    
     // 向后兼容：同步更新传统模式状态
     appStore.setCurrentPhraseMode(mode.id)
     
-    // 始终更新 scenesStore 状态，确保状态同步
+    // 更新 scenesStore 状态（主要状态管理）
     scenesStore.setCurrentSelection(newSelection)
   }
 

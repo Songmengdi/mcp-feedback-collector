@@ -11,8 +11,8 @@ export const useScenesStore = defineStore('scenes', () => {
   
   // 当前选择的场景和模式
   const currentSelection = ref<CurrentSelection>({
-    sceneId: 'default',
-    modeId: 'discuss'
+    sceneId: '', // 修复：不再硬编码default场景
+    modeId: ''   // 修复：不再硬编码discuss模式
   })
   
   // 当前场景下的模式列表
@@ -365,6 +365,19 @@ export const useScenesStore = defineStore('scenes', () => {
   const switchToMode = (modeId: string): void => {
     if (currentSceneModes.value.find(m => m.id === modeId)) {
       currentSelection.value.modeId = modeId
+      
+      // 同步更新appStore的向后兼容状态
+      try {
+        // 使用动态import避免循环依赖
+        import('./app').then(({ useAppStore }) => {
+          const appStore = useAppStore()
+          appStore.setCurrentPhraseMode(modeId)
+        }).catch(error => {
+          console.warn('同步appStore状态失败:', error)
+        })
+      } catch (error) {
+        console.warn('同步appStore状态失败:', error)
+      }
     }
   }
   
@@ -473,7 +486,8 @@ export const useScenesStore = defineStore('scenes', () => {
    */
   const reset = (): void => {
     scenes.value = []
-    currentSelection.value = { sceneId: 'default', modeId: 'discuss' }
+    // 修复：不再硬编码default场景，使用空值
+    currentSelection.value = { sceneId: '', modeId: '' }
     currentSceneModes.value = []
     loading.value = false
     error.value = null
