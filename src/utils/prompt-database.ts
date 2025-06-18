@@ -9,12 +9,7 @@ import { join } from 'path';
 import { logger } from './logger.js';
 import { MCPError } from '../types/index.js';
 
-export interface CustomPrompt {
-  mode: string;
-  prompt: string;
-  created_at: number;
-  updated_at: number;
-}
+
 
 // ===== 新增场景化相关接口 =====
 
@@ -37,6 +32,7 @@ export interface SceneMode {
   shortcut?: string;
   is_default: boolean;
   sort_order: number;
+  default_feedback?: string;
   created_at: number;
   updated_at: number;
 }
@@ -52,11 +48,12 @@ export interface ScenePrompt {
 export class PromptDatabase {
   private db: Database.Database;
   private dbPath: string;
-  private dbVersion: number = 2; // 升级版本号
+  private dbVersion: number = 2; // 目标版本号设为2
 
   constructor() {
     this.dbPath = this.getStoragePath();
     this.ensureStorageDirectory();
+    // 注意：必须在检查文件存在性之前创建数据库连接
     this.db = new Database(this.dbPath);
     this.initializeDatabase();
   }
@@ -106,26 +103,16 @@ export class PromptDatabase {
    */
   private initializeDatabase(): void {
     try {
-      // 检查数据库版本
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS db_metadata (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        )
-      `);
-
-      const versionResult = this.db.prepare('SELECT value FROM db_metadata WHERE key = ?').get('version') as { value: string } | undefined;
-      const currentVersion = versionResult ? parseInt(versionResult.value) : 1;
-
-      if (currentVersion < this.dbVersion) {
-        this.migrateDatabase(currentVersion);
+      // 检查是否为新数据库（文件不存在）
+      const isNewDatabase = !existsSync(this.dbPath);
+      
+      if (isNewDatabase) {
+        logger.info('检测到新数据库，执行完整初始化');
+        this.initializeNewDatabase();
+      } else {
+        logger.info('检测到现有数据库，检查版本升级');
+        this.upgradeExistingDatabase();
       }
-
-      // 创建或更新表结构
-      this.createTables();
-
-      // 更新版本号
-      this.db.prepare('INSERT OR REPLACE INTO db_metadata (key, value) VALUES (?, ?)').run('version', this.dbVersion.toString());
 
       logger.info(`提示词数据库初始化完成: ${this.dbPath} (版本: ${this.dbVersion})`);
     } catch (error) {
@@ -139,19 +126,67 @@ export class PromptDatabase {
   }
 
   /**
-   * 创建数据库表
+   * 初始化新数据库（直接创建最新版本）
    */
-  private createTables(): void {
-    // 保留原有的自定义提示词表（向后兼容）
+  private initializeNewDatabase(): void {
+    logger.info('开始初始化新数据库...');
+    
+    // 创建版本控制表
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS custom_prompts (
-        mode TEXT PRIMARY KEY,
-        prompt TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+      CREATE TABLE db_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       )
     `);
 
+    // 创建所有表结构
+    this.createTables();
+
+    // 初始化默认场景数据
+    this.initializeDefaultScenes();
+
+    // 设置版本号为当前最新版本
+    this.db.prepare('INSERT INTO db_metadata (key, value) VALUES (?, ?)').run('version', this.dbVersion.toString());
+    
+    logger.info(`新数据库初始化完成，版本: ${this.dbVersion}`);
+  }
+
+  /**
+   * 升级现有数据库
+   */
+  private upgradeExistingDatabase(): void {
+    // 确保版本控制表存在
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS db_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+
+    // 检查当前版本
+    const versionResult = this.db.prepare('SELECT value FROM db_metadata WHERE key = ?').get('version') as { value: string } | undefined;
+    const currentVersion = versionResult ? parseInt(versionResult.value) : 1;
+
+    logger.info(`现有数据库版本: ${currentVersion}, 目标版本: ${this.dbVersion}`);
+
+    // 确保表结构是最新的（必须在数据迁移之前）
+    this.createTables();
+
+    if (currentVersion < this.dbVersion) {
+      logger.info(`开始升级数据库: ${currentVersion} -> ${this.dbVersion}`);
+      this.migrateDatabase(currentVersion);
+    }
+
+    // 更新版本号
+    this.db.prepare('INSERT OR REPLACE INTO db_metadata (key, value) VALUES (?, ?)').run('version', this.dbVersion.toString());
+    
+    logger.info(`数据库升级完成，当前版本: ${this.dbVersion}`);
+  }
+
+  /**
+   * 创建数据库表
+   */
+  private createTables(): void {
     // 新增场景表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS scenes (
@@ -176,6 +211,7 @@ export class PromptDatabase {
         shortcut TEXT,
         is_default BOOLEAN NOT NULL DEFAULT 0,
         sort_order INTEGER NOT NULL DEFAULT 0,
+        default_feedback TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         FOREIGN KEY (scene_id) REFERENCES scenes (id) ON DELETE CASCADE
@@ -214,7 +250,7 @@ export class PromptDatabase {
     
     try {
       if (currentVersion < 2) {
-        // 从版本1迁移到版本2：引入场景化架构
+        // 从版本1迁移到版本2：引入场景化架构（包含default_feedback功能）
         logger.info('执行版本1到版本2的迁移：初始化场景化架构');
         this.initializeDefaultScenes();
       }
@@ -244,6 +280,28 @@ export class PromptDatabase {
 
       logger.info('初始化默认场景数据...');
       
+      // 使用事务确保数据一致性
+      const initTransaction = this.db.transaction(() => {
+        this.insertDefaultScenesData();
+      });
+      
+      initTransaction();
+      logger.info('默认场景数据初始化完成');
+    } catch (error) {
+      logger.error('初始化默认场景失败:', error);
+      throw new MCPError(
+        'Failed to initialize default scenes',
+        'DEFAULT_SCENES_INIT_ERROR',
+        error
+      );
+    }
+  }
+
+  /**
+   * 插入默认场景数据
+   */
+  private insertDefaultScenesData(): void {
+    try {
       const now = Date.now();
       
       // 插入编码场景
@@ -265,13 +323,13 @@ export class PromptDatabase {
 
       // 插入三种模式
       const insertMode = this.db.prepare(`
-        INSERT INTO scene_modes (id, scene_id, name, description, shortcut, is_default, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO scene_modes (id, scene_id, name, description, shortcut, is_default, sort_order, default_feedback, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      insertMode.run('discuss', 'coding', '探讨模式', '深入分析和建议，提供具体的实施意见', '1', 1, 0, now, now);
-      insertMode.run('edit', 'coding', '编辑模式', '代码修改和优化，编写具体的代码实现', '2', 0, 1, now, now);
-      insertMode.run('search', 'coding', '搜索模式', '信息查找和检索，深度检索相关代码', '3', 0, 2, now, now);
+      insertMode.run('discuss', 'coding', '探讨模式', '深入分析和建议，提供具体的实施意见', '1', 1, 0, '对之前的所有过程,做一个整体的总结性的归纳,并且明确最近一段时间我们的核心聚焦点是什么,思考接下来我们需要做什么', now, now);
+      insertMode.run('edit', 'coding', '编辑模式', '代码修改和优化，编写具体的代码实现', '2', 0, 1, '根据之前步骤及需求,完成编码', now, now);
+      insertMode.run('search', 'coding', '搜索模式', '信息查找和检索，深度检索相关代码', '3', 0, 2, '深入研究相关代码', now, now);
 
       // 插入提示词
       const insertPrompt = this.db.prepare(`
@@ -631,17 +689,32 @@ export class PromptDatabase {
     try {
       const now = Date.now();
       const stmt = this.db.prepare(`
-        INSERT INTO scene_modes (id, scene_id, name, description, shortcut, is_default, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO scene_modes (
+          id, scene_id, name, description, shortcut, is_default, sort_order, default_feedback, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      // 将布尔值转换为整数值以兼容SQLite
-      const isDefaultValue = this.convertBooleanForSQLite(mode.is_default);
-      stmt.run(mode.id, mode.scene_id, mode.name, mode.description, mode.shortcut, 
-               isDefaultValue, mode.sort_order, now, now);
-      logger.debug(`场景模式已创建 (id: ${mode.id})`);
+      
+      stmt.run(
+        mode.id,
+        mode.scene_id,
+        mode.name,
+        mode.description,
+        mode.shortcut || null,
+        this.convertBooleanForSQLite(mode.is_default),
+        mode.sort_order,
+        mode.default_feedback || null,
+        now,
+        now
+      );
+      
+      logger.info(`场景模式创建成功: ${mode.name} (${mode.id})`);
     } catch (error) {
-      logger.error(`创建场景模式失败 (id: ${mode.id}):`, error);
-      throw new MCPError(`Failed to create scene mode: ${mode.id}`, 'SCENE_MODE_CREATE_ERROR', { mode, error });
+      logger.error('场景模式创建失败:', error);
+      throw new MCPError(
+        'Failed to create scene mode',
+        'SCENE_MODE_CREATE_ERROR',
+        error
+      );
     }
   }
 
@@ -650,24 +723,64 @@ export class PromptDatabase {
    */
   updateSceneMode(modeId: string, updates: Partial<Omit<SceneMode, 'id' | 'created_at' | 'updated_at'>>): void {
     try {
-      const now = Date.now();
-      const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+      const fields = [];
+      const values = [];
       
-      // 处理布尔值转换
-      const values = Object.values(updates).map((value, index) => {
-        const key = Object.keys(updates)[index];
-        if (key === 'is_default' && typeof value === 'boolean') {
-          return this.convertBooleanForSQLite(value);
-        }
-        return value;
-      });
+      if (updates.scene_id !== undefined) {
+        fields.push('scene_id = ?');
+        values.push(updates.scene_id);
+      }
+      if (updates.name !== undefined) {
+        fields.push('name = ?');
+        values.push(updates.name);
+      }
+      if (updates.description !== undefined) {
+        fields.push('description = ?');
+        values.push(updates.description);
+      }
+      if (updates.shortcut !== undefined) {
+        fields.push('shortcut = ?');
+        values.push(updates.shortcut || null);
+      }
+      if (updates.is_default !== undefined) {
+        fields.push('is_default = ?');
+        values.push(this.convertBooleanForSQLite(updates.is_default));
+      }
+      if (updates.sort_order !== undefined) {
+        fields.push('sort_order = ?');
+        values.push(updates.sort_order);
+      }
+      if (updates.default_feedback !== undefined) {
+        fields.push('default_feedback = ?');
+        values.push(updates.default_feedback || null);
+      }
       
-      const stmt = this.db.prepare(`UPDATE scene_modes SET ${fields}, updated_at = ? WHERE id = ?`);
-      stmt.run(...values, now, modeId);
-      logger.debug(`场景模式已更新 (id: ${modeId})`);
+      if (fields.length === 0) {
+        return; // 没有需要更新的字段
+      }
+      
+      fields.push('updated_at = ?');
+      values.push(Date.now());
+      values.push(modeId);
+      
+      const sql = `UPDATE scene_modes SET ${fields.join(', ')} WHERE id = ?`;
+      const result = this.db.prepare(sql).run(...values);
+      
+      if (result.changes === 0) {
+        throw new MCPError(
+          `Scene mode not found: ${modeId}`,
+          'SCENE_MODE_NOT_FOUND'
+        );
+      }
+      
+      logger.info(`场景模式更新成功: ${modeId}`);
     } catch (error) {
-      logger.error(`更新场景模式失败 (id: ${modeId}):`, error);
-      throw new MCPError(`Failed to update scene mode: ${modeId}`, 'SCENE_MODE_UPDATE_ERROR', { modeId, updates, error });
+      logger.error('场景模式更新失败:', error);
+      throw new MCPError(
+        'Failed to update scene mode',
+        'SCENE_MODE_UPDATE_ERROR',
+        error
+      );
     }
   }
 
@@ -817,109 +930,7 @@ export class PromptDatabase {
     }
   }
 
-  // ===== 原有方法保持向后兼容 =====
 
-  /**
-   * 获取指定模式的提示词（兼容旧版本）
-   */
-  getPrompt(mode: string): CustomPrompt | null {
-    try {
-      const stmt = this.db.prepare('SELECT * FROM custom_prompts WHERE mode = ?');
-      const result = stmt.get(mode) as CustomPrompt | undefined;
-      return result || null;
-    } catch (error) {
-      logger.error(`获取提示词失败 (mode: ${mode}):`, error);
-      throw new MCPError(
-        `Failed to get prompt for mode: ${mode}`,
-        'PROMPT_GET_ERROR',
-        { mode, error }
-      );
-    }
-  }
-
-  /**
-   * 保存提示词（兼容旧版本）
-   */
-  savePrompt(mode: string, prompt: string): void {
-    try {
-      const now = Date.now();
-      const existing = this.getPrompt(mode);
-
-      if (existing) {
-        // 更新现有记录
-        const stmt = this.db.prepare('UPDATE custom_prompts SET prompt = ?, updated_at = ? WHERE mode = ?');
-        stmt.run(prompt, now, mode);
-        logger.debug(`提示词已更新 (mode: ${mode})`);
-      } else {
-        // 插入新记录
-        const stmt = this.db.prepare('INSERT INTO custom_prompts (mode, prompt, created_at, updated_at) VALUES (?, ?, ?, ?)');
-        stmt.run(mode, prompt, now, now);
-        logger.debug(`提示词已创建 (mode: ${mode})`);
-      }
-    } catch (error) {
-      logger.error(`保存提示词失败 (mode: ${mode}):`, error);
-      throw new MCPError(
-        `Failed to save prompt for mode: ${mode}`,
-        'PROMPT_SAVE_ERROR',
-        { mode, error }
-      );
-    }
-  }
-
-  /**
-   * 删除指定模式的提示词（兼容旧版本）
-   */
-  deletePrompt(mode: string): boolean {
-    try {
-      const stmt = this.db.prepare('DELETE FROM custom_prompts WHERE mode = ?');
-      const result = stmt.run(mode);
-      const deleted = result.changes > 0;
-      
-      if (deleted) {
-        logger.debug(`提示词已删除 (mode: ${mode})`);
-      }
-      
-      return deleted;
-    } catch (error) {
-      logger.error(`删除提示词失败 (mode: ${mode}):`, error);
-      throw new MCPError(
-        `Failed to delete prompt for mode: ${mode}`,
-        'PROMPT_DELETE_ERROR',
-        { mode, error }
-      );
-    }
-  }
-
-  /**
-   * 获取所有提示词（兼容旧版本）
-   */
-  getAllPrompts(): CustomPrompt[] {
-    try {
-      const stmt = this.db.prepare('SELECT * FROM custom_prompts ORDER BY mode');
-      return stmt.all() as CustomPrompt[];
-    } catch (error) {
-      logger.error('获取所有提示词失败:', error);
-      throw new MCPError(
-        'Failed to get all prompts',
-        'PROMPT_GET_ALL_ERROR',
-        error
-      );
-    }
-  }
-
-  /**
-   * 检查数据库是否为空
-   */
-  isEmpty(): boolean {
-    try {
-      const stmt = this.db.prepare('SELECT COUNT(*) as count FROM custom_prompts');
-      const result = stmt.get() as { count: number };
-      return result.count === 0;
-    } catch (error) {
-      logger.error('检查数据库是否为空失败:', error);
-      return true; // 出错时假设为空
-    }
-  }
 
   /**
    * 关闭数据库连接

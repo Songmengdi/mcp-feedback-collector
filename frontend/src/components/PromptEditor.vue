@@ -13,36 +13,63 @@
       </div>
       
       <div class="prompt-editor-body">
-        <div class="editor-toolbar">
-          <div class="toolbar-left">
-            <span class="editor-label">提示词模板</span>
-            <span class="variable-hint">支持变量: &#123;&#123; feedback &#125;&#125;</span>
+        <!-- 提示词模板编辑区 -->
+        <div class="editor-section">
+          <div class="editor-toolbar">
+            <div class="toolbar-left">
+              <span class="editor-label">提示词模板</span>
+              <span class="variable-hint">支持变量: &#123;&#123; feedback &#125;&#125;</span>
+            </div>
+            <div class="toolbar-right">
+              <button 
+                class="toolbar-btn" 
+                @click="insertVariable"
+                :disabled="loading"
+                title="插入反馈变量"
+              >
+                插入变量
+              </button>
+            </div>
           </div>
-          <div class="toolbar-right">
-            <button 
-              class="toolbar-btn" 
-              @click="insertVariable"
+          
+          <div class="editor-container">
+            <textarea
+              ref="editorTextarea"
+              v-model="promptContent"
+              class="prompt-textarea"
+              placeholder="请输入提示词模板内容..."
               :disabled="loading"
-              title="插入反馈变量"
-            >
-              插入变量
-            </button>
+              @keydown="handleKeydown"
+            ></textarea>
           </div>
         </div>
-        
-        <div class="editor-container">
-          <textarea
-            ref="editorTextarea"
-            v-model="promptContent"
-            class="prompt-textarea"
-            placeholder="请输入提示词模板内容..."
-            :disabled="loading"
-            @keydown="handleKeydown"
-          ></textarea>
+
+        <!-- 默认反馈内容编辑区 -->
+        <div class="editor-section">
+          <div class="editor-toolbar">
+            <div class="toolbar-left">
+              <span class="editor-label">默认反馈内容</span>
+              <span class="variable-hint">用户未输入反馈时的默认内容</span>
+            </div>
+          </div>
+          
+          <div class="editor-container">
+            <textarea
+              ref="feedbackTextarea"
+              v-model="defaultFeedbackContent"
+              class="feedback-textarea"
+              placeholder="请输入该模式的默认反馈内容..."
+              :disabled="loading"
+              @keydown="handleKeydown"
+            ></textarea>
+          </div>
         </div>
         
         <div class="editor-status">
-          <span class="char-count">{{ promptContent.length }} 字符</span>
+          <div class="status-left">
+            <span class="char-count">提示词: {{ promptContent.length }} 字符</span>
+            <span class="char-count">默认反馈: {{ defaultFeedbackContent.length }} 字符</span>
+          </div>
           <span v-if="lastSaved" class="last-saved">
             最后保存: {{ formatTime(lastSaved) }}
           </span>
@@ -78,6 +105,7 @@ interface PromptEditorOptions {
   scene: Scene
   mode: SceneMode
   initialPrompt?: string
+  initialDefaultFeedback?: string
 }
 
 // Props
@@ -85,12 +113,15 @@ const visible = ref(false)
 const scene = ref<Scene | null>(null)
 const mode = ref<SceneMode | null>(null)
 const promptContent = ref('')
-const originalContent = ref('')
+const defaultFeedbackContent = ref('')
+const originalPromptContent = ref('')
+const originalDefaultFeedbackContent = ref('')
 const loading = ref(false)
 const lastSaved = ref<number | null>(null)
 
 // Refs
 const editorTextarea = ref<HTMLTextAreaElement>()
+const feedbackTextarea = ref<HTMLTextAreaElement>()
 
 // 内部状态
 let resolvePromise: ((saved: boolean) => void) | null = null
@@ -98,7 +129,10 @@ let resolvePromise: ((saved: boolean) => void) | null = null
 // 计算属性
 const sceneName = computed(() => scene.value?.name || '')
 const modeName = computed(() => mode.value?.name || '')
-const hasChanges = computed(() => promptContent.value !== originalContent.value)
+const hasChanges = computed(() => 
+  promptContent.value !== originalPromptContent.value || 
+  defaultFeedbackContent.value !== originalDefaultFeedbackContent.value
+)
 
 // 方法
 const show = (options: PromptEditorOptions): Promise<boolean> => {
@@ -106,11 +140,13 @@ const show = (options: PromptEditorOptions): Promise<boolean> => {
   scene.value = options.scene
   mode.value = options.mode
   promptContent.value = options.initialPrompt || ''
-  originalContent.value = options.initialPrompt || ''
+  defaultFeedbackContent.value = options.initialDefaultFeedback || ''
+  originalPromptContent.value = options.initialPrompt || ''
+  originalDefaultFeedbackContent.value = options.initialDefaultFeedback || ''
   loading.value = false
   lastSaved.value = null
   
-  // 聚焦到编辑器
+  // 聚焦到提示词编辑器
   nextTick(() => {
     if (editorTextarea.value) {
       editorTextarea.value.focus()
@@ -127,7 +163,9 @@ const hide = () => {
   scene.value = null
   mode.value = null
   promptContent.value = ''
-  originalContent.value = ''
+  defaultFeedbackContent.value = ''
+  originalPromptContent.value = ''
+  originalDefaultFeedbackContent.value = ''
   loading.value = false
   lastSaved.value = null
   resolvePromise = null
@@ -138,32 +176,69 @@ const handleSave = async () => {
   
   loading.value = true
   try {
-    // 触发保存事件
-    const event = new CustomEvent('savePrompt', {
-      detail: {
-        sceneId: scene.value.id,
-        modeId: mode.value.id,
-        prompt: promptContent.value
-      }
-    })
-    window.dispatchEvent(event)
+    // 触发保存提示词事件
+    if (promptContent.value !== originalPromptContent.value) {
+      const promptEvent = new CustomEvent('savePrompt', {
+        detail: {
+          sceneId: scene.value.id,
+          modeId: mode.value.id,
+          prompt: promptContent.value
+        }
+      })
+      window.dispatchEvent(promptEvent)
+    }
+    
+    // 触发保存默认反馈事件
+    if (defaultFeedbackContent.value !== originalDefaultFeedbackContent.value) {
+      const feedbackEvent = new CustomEvent('saveDefaultFeedback', {
+        detail: {
+          sceneId: scene.value.id,
+          modeId: mode.value.id,
+          defaultFeedback: defaultFeedbackContent.value
+        }
+      })
+      window.dispatchEvent(feedbackEvent)
+    }
     
     // 等待保存完成的确认
     await new Promise((resolve) => {
-      const handleSaveComplete = () => {
-        window.removeEventListener('promptSaveComplete', handleSaveComplete)
-        resolve(true)
+      let promptSaved = promptContent.value === originalPromptContent.value
+      let feedbackSaved = defaultFeedbackContent.value === originalDefaultFeedbackContent.value
+      
+      const handlePromptSaveComplete = () => {
+        promptSaved = true
+        checkAllSaved()
       }
-      window.addEventListener('promptSaveComplete', handleSaveComplete)
+      
+      const handleFeedbackSaveComplete = () => {
+        feedbackSaved = true
+        checkAllSaved()
+      }
+      
+      const checkAllSaved = () => {
+        if (promptSaved && feedbackSaved) {
+          window.removeEventListener('promptSaveComplete', handlePromptSaveComplete)
+          window.removeEventListener('defaultFeedbackSaveComplete', handleFeedbackSaveComplete)
+          resolve(true)
+        }
+      }
+      
+      window.addEventListener('promptSaveComplete', handlePromptSaveComplete)
+      window.addEventListener('defaultFeedbackSaveComplete', handleFeedbackSaveComplete)
       
       // 5秒超时
       setTimeout(() => {
-        window.removeEventListener('promptSaveComplete', handleSaveComplete)
+        window.removeEventListener('promptSaveComplete', handlePromptSaveComplete)
+        window.removeEventListener('defaultFeedbackSaveComplete', handleFeedbackSaveComplete)
         resolve(false)
       }, 5000)
+      
+      // 如果没有变化，立即完成
+      checkAllSaved()
     })
     
-    originalContent.value = promptContent.value
+    originalPromptContent.value = promptContent.value
+    originalDefaultFeedbackContent.value = defaultFeedbackContent.value
     lastSaved.value = Date.now()
     
     if (resolvePromise) {
@@ -342,6 +417,18 @@ defineExpose({
   overflow: hidden;
 }
 
+.editor-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom: 1px solid #3e3e42;
+}
+
+.editor-section:last-child {
+  border-bottom: none;
+}
+
 .editor-toolbar {
   display: flex;
   justify-content: space-between;
@@ -349,6 +436,7 @@ defineExpose({
   padding: 12px 20px;
   background: #1e1e1e;
   border-bottom: 1px solid #3e3e42;
+  flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -395,47 +483,63 @@ defineExpose({
   flex: 1;
   padding: 20px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.prompt-textarea {
+.prompt-textarea,
+.feedback-textarea {
+  flex: 1;
   width: 100%;
-  height: 100%;
+  padding: 12px;
   background: #1e1e1e;
   border: 1px solid #3e3e42;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #cccccc;
-  font-size: 13px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   line-height: 1.5;
-  padding: 12px;
   resize: none;
   outline: none;
   transition: border-color 0.2s ease;
+  min-height: 120px;
 }
 
-.prompt-textarea:focus {
+.prompt-textarea:focus,
+.feedback-textarea:focus {
   border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
 }
 
-.prompt-textarea::placeholder {
-  color: #6a6a6a;
+.prompt-textarea:disabled,
+.feedback-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .editor-status {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 20px;
-  background: #1e1e1e;
+  padding: 12px 20px;
+  background: #2d2d30;
   border-top: 1px solid #3e3e42;
-  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .char-count {
+  font-size: 12px;
   color: #969696;
 }
 
 .last-saved {
+  font-size: 12px;
   color: #4ec9b0;
 }
 

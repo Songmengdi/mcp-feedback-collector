@@ -54,6 +54,7 @@ export interface SceneMode {
   shortcut?: string
   isDefault: boolean
   sortOrder: number
+  defaultFeedback?: string
   createdAt: number
   updatedAt: number
 }
@@ -129,6 +130,7 @@ export interface SceneModeRequest {
   shortcut?: string
   isDefault?: boolean
   sortOrder?: number
+  defaultFeedback?: string
 }
 
 // 配置导出/导入数据结构

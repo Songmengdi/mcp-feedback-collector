@@ -23,10 +23,9 @@
         :title="mode.shortcut ? `快捷键: ${shortcutPrefix}+${mode.shortcut}` : mode.description"
         :disabled="!mode.id"
       >
-        <span class="mode-label">
-          {{ mode.name }}
-          <span v-if="mode.shortcut" class="mode-shortcut">{{ shortcutPrefix }}+{{ mode.shortcut }}</span>
-        </span>
+        <span class="mode-label">{{ mode.name }}</span>
+        <span v-if="mode.shortcut" class="mode-shortcut">{{ shortcutPrefix }}+{{ mode.shortcut }}</span>
+        <span v-else class="mode-shortcut">无快捷键</span>
       </button>
     </div>
     
@@ -76,6 +75,7 @@ import { useAppStore } from '../stores/app'
 import { useScenesStore } from '../stores/scenes'
 import type { PhraseModeType } from '../types/app'
 import promptService from '../services/promptService'
+import shortcutService from '../services/shortcutService'
 
 // Store引用
 const appStore = useAppStore()
@@ -254,6 +254,23 @@ onMounted(async () => {
     }
   }
   
+  // 确保快捷键服务已初始化
+  shortcutService.init()
+  
+  // 监听场景模式变化，更新快捷键绑定
+  const updateShortcutBindings = () => {
+    if (scenesStore.hasModes) {
+      shortcutService.updateBindings(scenesStore.currentSceneModes)
+    }
+  }
+  
+  // 初始更新
+  updateShortcutBindings()
+  
+  // 监听模式变化
+  scenesStore.$subscribe(() => {
+    updateShortcutBindings()
+  })
 })
 
 // 监听器
@@ -473,8 +490,6 @@ watch(currentModeId, async () => {
   overflow-y: auto;
   flex: 1;
 }
-
-
 
 .modal-footer {
   display: flex;

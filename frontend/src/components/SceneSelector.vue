@@ -354,7 +354,8 @@ onUnmounted(() => {
   border-bottom-right-radius: 6px;
   max-height: 200px;
   overflow-y: auto;
-  z-index: 1000;
+  /* z-index层级规范: 下拉菜单 100-499, 悬浮面板/侧边栏 500-999, 模态框 2000+ */
+  z-index: 400;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 

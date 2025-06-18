@@ -451,6 +451,13 @@ export const useScenesStore = defineStore('scenes', () => {
     return currentSceneModes.value.find(m => m.id === modeId)
   }
 
+  /**
+   * 获取当前模式对象
+   */
+  const getCurrentMode = (): SceneMode | null => {
+    return currentSceneModes.value.find(m => m.id === currentSelection.value.modeId) || null
+  }
+
   return {
     // ===== 状态 =====
     scenes,
@@ -490,6 +497,7 @@ export const useScenesStore = defineStore('scenes', () => {
     clearError,
     reset,
     getSceneById,
-    getModeById
+    getModeById,
+    getCurrentMode
   }
 }) 

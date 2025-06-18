@@ -2,10 +2,9 @@
  * 提示词管理服务
  */
 
-import { PromptDatabase, CustomPrompt, Scene, SceneMode, ScenePrompt } from './prompt-database.js';
+import { PromptDatabase, Scene, SceneMode, ScenePrompt } from './prompt-database.js';
 import { logger } from './logger.js';
 import { MCPError, SceneRequest, SceneModeRequest } from '../types/index.js';
-import { getDefaultScenes } from './default-scenes.js';
 
 export interface PromptValidationResult {
   isValid: boolean;
@@ -35,7 +34,7 @@ export interface SceneModeDetails {
   id: string;
   name: string;
   description: string;
-  hasCustomPrompt: boolean;
+  hasScenePrompt: boolean;
   hasDefaultPrompt: boolean;
 }
 
@@ -47,41 +46,12 @@ export interface SceneConfig {
 
 export class PromptManager {
   private database: PromptDatabase;
-  private defaultScenePrompts: Map<string, string>; // sceneId:modeId -> prompt
 
   constructor() {
     this.database = new PromptDatabase();
-    this.defaultScenePrompts = new Map();
-    this.initializeDefaultScenes();
   }
 
-  /**
-   * 初始化默认场景和场景提示词
-   */
-  private initializeDefaultScenes(): void {
-    try {
-      const defaultScenes = getDefaultScenes();
-      
-      // 初始化默认场景提示词映射
-      for (const scene of defaultScenes.scenes) {
-        const sceneModes = defaultScenes.sceneModes.filter((mode: any) => mode.scene_id === scene.id);
-        for (const mode of sceneModes) {
-          const scenePrompt = defaultScenes.scenePrompts.find(
-            (prompt: any) => prompt.sceneId === scene.id && prompt.modeId === mode.id
-          );
-          if (scenePrompt) {
-            const key = `${scene.id}:${mode.id}`;
-            this.defaultScenePrompts.set(key, scenePrompt.prompt);
-          }
-        }
-      }
 
-      
-      logger.info('默认场景初始化完成');
-    } catch (error) {
-      logger.error('初始化默认场景失败:', error);
-    }
-  }
 
   // 传统模式支持已移除，统一使用场景化API
 
@@ -196,16 +166,14 @@ export class PromptManager {
 
       const modes = this.database.getSceneModes(sceneId);
       const modeDetails: SceneModeDetails[] = modes.map(mode => {
-        const customPrompt = this.database.getScenePrompt(sceneId, mode.id);
-        const defaultKey = `${sceneId}:${mode.id}`;
-        const hasDefaultPrompt = this.defaultScenePrompts.has(defaultKey);
+        const scenePrompt = this.database.getScenePrompt(sceneId, mode.id);
         
         return {
           id: mode.id,
           name: mode.name,
           description: mode.description,
-          hasCustomPrompt: !!customPrompt,
-          hasDefaultPrompt
+          hasScenePrompt: !!scenePrompt,
+          hasDefaultPrompt: false // 不再依赖默认提示词文件
         };
       });
 
@@ -369,7 +337,8 @@ export class PromptManager {
         description: modeRequest.description,
         shortcut: modeRequest.shortcut || '',
         is_default: modeRequest.isDefault || false,
-        sort_order: modeRequest.sortOrder || 999
+        sort_order: modeRequest.sortOrder || 999,
+        default_feedback: modeRequest.defaultFeedback || ''
       };
       
       logger.debug('准备存储的模式数据:', modeData);
@@ -384,6 +353,7 @@ export class PromptManager {
         shortcut: modeData.shortcut,
         is_default: modeData.is_default,
         sort_order: modeData.sort_order,
+        default_feedback: modeData.default_feedback,
         created_at: now,
         updated_at: now
       };
@@ -420,6 +390,7 @@ export class PromptManager {
       if (modeRequest.shortcut !== undefined) updateData.shortcut = modeRequest.shortcut;
       if (modeRequest.isDefault !== undefined) updateData.is_default = modeRequest.isDefault;
       if (modeRequest.sortOrder !== undefined) updateData.sort_order = modeRequest.sortOrder;
+      if (modeRequest.defaultFeedback !== undefined) updateData.default_feedback = modeRequest.defaultFeedback;
       
       logger.debug('准备更新的模式数据:', updateData);
       this.database.updateSceneMode(modeId, updateData);
@@ -460,19 +431,11 @@ export class PromptManager {
    */
   getScenePrompt(sceneId: string, modeId: string): string | null {
     try {
-      // 首先尝试获取自定义提示词
-      const customPrompt = this.database.getScenePrompt(sceneId, modeId);
-      if (customPrompt) {
-        logger.debug(`使用自定义场景提示词 (scene: ${sceneId}, mode: ${modeId})`);
-        return customPrompt.prompt;
-      }
-
-      // 回退到默认提示词
-      const defaultKey = `${sceneId}:${modeId}`;
-      const defaultPrompt = this.defaultScenePrompts.get(defaultKey);
-      if (defaultPrompt) {
-        logger.debug(`使用默认场景提示词 (scene: ${sceneId}, mode: ${modeId})`);
-        return defaultPrompt;
+      // 直接从数据库获取场景提示词
+      const scenePrompt = this.database.getScenePrompt(sceneId, modeId);
+      if (scenePrompt) {
+        logger.debug(`使用场景提示词 (scene: ${sceneId}, mode: ${modeId})`);
+        return scenePrompt.prompt;
       }
 
       logger.warn(`未找到场景提示词 (scene: ${sceneId}, mode: ${modeId}), 返回通用模板`);

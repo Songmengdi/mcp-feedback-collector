@@ -59,9 +59,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import socketService from '../services/socket'
 import promptService from '../services/promptService'
+import shortcutService from '../services/shortcutService'
 import { useAppStore } from '../stores/app'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
+import { useScenesStore } from '../stores/scenes'
 import type { ImageFile } from '../types/app'
 import ImageUpload from './ImageUpload.vue'
 import PhraseModeSelector from './PhraseModeSelector.vue'
@@ -70,6 +72,7 @@ import PhraseModeSelector from './PhraseModeSelector.vue'
 const feedbackStore = useFeedbackStore()
 const connectionStore = useConnectionStore()
 const appStore = useAppStore()
+const scenesStore = useScenesStore()
 
 // 本地状态
 const feedbackText = ref('')
@@ -131,7 +134,7 @@ const applyQuickPhraseToFeedback = async (text: string): Promise<string> => {
 const getCustomQuickPhrase = async (): Promise<string> => {
   try {
     // 使用场景化API获取提示词
-    const selection = { sceneId: 'coding', modeId: appStore.currentPhraseMode }
+    const selection = { sceneId: appStore.currentSelection.sceneId, modeId: appStore.currentSelection.modeId }
     const prompt = await promptService.getUnifiedPrompt(selection)
     return prompt || appStore.defaultPhrases[appStore.currentPhraseMode]
   } catch (error) {
@@ -141,14 +144,9 @@ const getCustomQuickPhrase = async (): Promise<string> => {
   }
 }
 
-// 获取默认反馈内容
+// 获取默认反馈内容 - 重构为使用快捷键服务
 const getDefaultFeedback = (): string => {
-  const defaultFeedbacks = {
-    discuss: '对之前的所有过程,做一个整体的总结性的归纳,并且明确最近一段时间我们的核心聚焦点是什么,思考接下来我们需要做什么',
-    edit: '根据之前步骤及需求,完成编码',
-    search: '深入研究相关代码'
-  }
-  return defaultFeedbacks[appStore.currentPhraseMode as keyof typeof defaultFeedbacks] || ''
+  return shortcutService.getCurrentModeDefaultFeedback()
 }
 
 // 表单提交处理
@@ -355,7 +353,7 @@ const debounce = (func: Function, wait: number) => {
 // 防抖的高度计算函数
 const debouncedCalculateHeight = debounce(calculateTextareaHeight, 100)
 
-// 快捷键处理
+// 快捷键处理 - 重构为使用统一的快捷键服务
 const handleKeydown = (e: KeyboardEvent) => {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
   const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey
@@ -376,22 +374,8 @@ const handleKeydown = (e: KeyboardEvent) => {
     return
   }
   
-  // 检查反馈模式切换快捷键 (Ctrl/Cmd + 1/2/3)
-  if (isCtrlOrCmd && ['1', '2', '3'].includes(e.key)) {
-    e.preventDefault()
-    
-    const modeMap = {
-      '1': 'discuss',
-      '2': 'edit', 
-      '3': 'search'
-    }
-    
-    const targetMode = modeMap[e.key as '1' | '2' | '3']
-    if (targetMode) {
-      appStore.setCurrentPhraseMode(targetMode)
-    }
-    return
-  }
+  // 快捷键模式切换现在由shortcutService统一处理
+  // 这里不再需要硬编码的快捷键处理逻辑
   
   // 检查清空表单快捷键 (Ctrl/Cmd + Backspace)
   if (isCtrlOrCmd && e.key === 'Backspace') {
@@ -409,6 +393,24 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 // 生命周期
 onMounted(() => {
+  // 初始化快捷键服务
+  shortcutService.init()
+  
+  // 监听场景模式变化，更新快捷键绑定
+  const updateShortcutBindings = () => {
+    if (scenesStore.hasModes) {
+      shortcutService.updateBindings(scenesStore.currentSceneModes)
+    }
+  }
+  
+  // 初始更新
+  updateShortcutBindings()
+  
+  // 监听模式变化
+  scenesStore.$subscribe(() => {
+    updateShortcutBindings()
+  })
+  
   document.addEventListener('keydown', handleKeydown)
   
   // 添加窗口尺寸变化监听
@@ -436,6 +438,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // 销毁快捷键服务
+  shortcutService.destroy()
+  
   document.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', debouncedCalculateHeight)
   

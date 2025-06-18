@@ -563,7 +563,7 @@ export class WebServer {
     this.app.post('/api/scenes/:sceneId/modes', (req, res) => {
       try {
         const { sceneId } = req.params;
-        const { name, description, shortcut, isDefault, sortOrder } = req.body;
+        const { name, description, shortcut, isDefault, sortOrder, defaultFeedback } = req.body;
 
         if (!name || typeof name !== 'string') {
           res.status(400).json({
@@ -589,7 +589,8 @@ export class WebServer {
           description,
           shortcut: shortcut || '',
           isDefault: isDefault || false,
-          sortOrder: sortOrder || 999
+          sortOrder: sortOrder || 999,
+          defaultFeedback: defaultFeedback || ''
         };
 
         logger.debug('创建场景模式请求数据:', { sceneId, modeRequest });
@@ -616,7 +617,7 @@ export class WebServer {
     this.app.put('/api/scenes/:sceneId/modes/:modeId', (req, res) => {
       try {
         const { sceneId, modeId } = req.params;
-        const { name, description, shortcut, isDefault, sortOrder } = req.body;
+        const { name, description, shortcut, isDefault, sortOrder, defaultFeedback } = req.body;
 
         if (!name || typeof name !== 'string') {
           res.status(400).json({
@@ -642,7 +643,8 @@ export class WebServer {
           description,
           ...(shortcut !== undefined && { shortcut }),
           ...(isDefault !== undefined && { isDefault }),
-          ...(sortOrder !== undefined && { sortOrder })
+          ...(sortOrder !== undefined && { sortOrder }),
+          ...(defaultFeedback !== undefined && { defaultFeedback })
         };
 
         logger.debug('更新场景模式请求数据:', { sceneId, modeId, modeRequest });
@@ -1568,6 +1570,7 @@ export class WebServer {
       shortcut: mode.shortcut,
       isDefault: Boolean(mode.is_default),       // 下划线转驼峰，显式转换为布尔值
       sortOrder: mode.sort_order,       // 下划线转驼峰
+      defaultFeedback: mode.default_feedback,   // 下划线转驼峰
       createdAt: mode.created_at,       // 下划线转驼峰
       updatedAt: mode.updated_at        // 下划线转驼峰
     };

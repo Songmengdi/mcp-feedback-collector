@@ -47,7 +47,7 @@ body {
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
-    z-index: 1000;
+    z-index: 200;
 }
 
 .connection-status.connected {

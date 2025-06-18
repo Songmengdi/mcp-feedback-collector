@@ -277,13 +277,17 @@
             ></textarea>
           </div>
           <div class="form-group">
-            <label class="checkbox-label">
-              <input 
-                v-model="sceneForm.isDefault" 
-                type="checkbox"
-                :disabled="saving"
-              />
-              设置为默认场景
+            <label class="switch-label">
+              <span class="switch-text">设置为默认场景</span>
+              <div class="switch-container">
+                <input 
+                  v-model="sceneForm.isDefault" 
+                  type="checkbox"
+                  class="switch-input"
+                  :disabled="saving"
+                />
+                <span class="switch-slider"></span>
+              </div>
             </label>
           </div>
         </div>
@@ -326,6 +330,17 @@
               class="form-textarea"
               rows="3"
               placeholder="描述这个模式的功能和用途"
+              :disabled="saving"
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label for="modeDefaultFeedback">默认反馈内容</label>
+            <textarea 
+              id="modeDefaultFeedback"
+              v-model="modeForm.defaultFeedback" 
+              class="form-textarea"
+              rows="4"
+              placeholder="用户未输入反馈时的默认内容，如：对之前的所有过程做一个整体总结..."
               :disabled="saving"
             ></textarea>
           </div>
@@ -472,7 +487,8 @@ const modeForm = ref<SceneModeRequest>({
   description: '',
   shortcut: '',
   isDefault: false,
-  sortOrder: 999
+  sortOrder: 999,
+  defaultFeedback: ''
 })
 
 // 导入相关
@@ -686,7 +702,8 @@ const addModeToScene = async (scene: Scene) => {
     name: '',
     description: '',
     shortcut: nextShortcut <= 9 ? nextShortcut.toString() : '',
-    isDefault: false
+    isDefault: false,
+    defaultFeedback: ''
   }
   showModeDialog.value = true
 }
@@ -704,7 +721,8 @@ const editMode = async (scene: Scene, mode: SceneMode) => {
     description: currentMode.description,
     shortcut: currentMode.shortcut || '',
     isDefault: currentMode.isDefault,
-    sortOrder: currentMode.sortOrder || 999
+    sortOrder: currentMode.sortOrder || 999,
+    defaultFeedback: currentMode.defaultFeedback || ''
   }
   showModeDialog.value = true
 }
@@ -803,11 +821,14 @@ const editModePrompt = async (scene: Scene, mode: SceneMode) => {
     const saved = await promptEditorRef.value.show({
       scene,
       mode,
-      initialPrompt: currentPrompt
+      initialPrompt: currentPrompt,
+      initialDefaultFeedback: mode.defaultFeedback || ''
     })
     
     if (saved) {
       console.log(`提示词编辑完成: ${scene.name} / ${mode.name}`)
+      // 重新加载场景模式数据以获取最新的默认反馈内容
+      await loadSceneModes(scene.id, true)
     }
   } catch (error) {
     // 错误已通过全局错误处理器显示
@@ -904,6 +925,23 @@ const handlePromptSave = async (event: Event) => {
   }
 }
 
+// 默认反馈保存处理
+const handleDefaultFeedbackSave = async (event: Event) => {
+  const customEvent = event as CustomEvent
+  const { sceneId, modeId, defaultFeedback } = customEvent.detail
+  
+  try {
+    // 更新模式的默认反馈内容
+    await scenesStore.updateSceneMode(sceneId, modeId, { defaultFeedback })
+    
+    // 触发保存完成事件
+    window.dispatchEvent(new CustomEvent('defaultFeedbackSaveComplete'))
+  } catch (error) {
+    // 错误已通过全局错误处理器显示
+    throw error
+  }
+}
+
 // 生命周期
 onMounted(async () => {
   if (!hasScenes.value) {
@@ -912,6 +950,8 @@ onMounted(async () => {
   
   // 添加提示词保存事件监听器
   window.addEventListener('savePrompt', handlePromptSave)
+  // 添加默认反馈保存事件监听器
+  window.addEventListener('saveDefaultFeedback', handleDefaultFeedbackSave)
   
   // 预加载可见场景的模式数据
   await preloadVisibleSceneModes()

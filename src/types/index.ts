@@ -165,6 +165,7 @@ export interface SceneMode {
   shortcut?: string;
   is_default: boolean;  // 数据库字段使用下划线命名
   sort_order: number;   // 数据库字段使用下划线命名
+  default_feedback?: string;  // 数据库字段使用下划线命名
   created_at: number;
   updated_at: number;
 }
@@ -194,4 +195,5 @@ export interface SceneModeRequest {
   shortcut?: string;
   isDefault?: boolean;  // 前端使用驼峰命名
   sortOrder?: number;   // 前端使用驼峰命名
+  defaultFeedback?: string;  // 前端使用驼峰命名
 }
