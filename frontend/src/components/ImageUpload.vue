@@ -300,15 +300,16 @@ const showStatusMessage = (type: string, message: string) => {
 
 <style scoped>
 .image-upload-container {
-  margin-top: 8px;
+  margin-top: 4px; /* 减少上边距 */
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  gap: 16px;
+  margin-bottom: 8px; /* 减少下边距 */
+  gap: 10px; /* 减少间距 */
 }
 
 .toolbar-buttons {
@@ -317,16 +318,16 @@ const showStatusMessage = (type: string, message: string) => {
 }
 
 .toolbar-btn {
-  padding: 6px 12px;
+  padding: 4px 8px; /* 减少内边距 */
   border: 1px solid #3e3e42;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #2d2d30;
   color: #cccccc;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px; /* 减小字体 */
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px; /* 减少间距 */
   transition: all 0.2s ease;
 }
 
@@ -336,44 +337,49 @@ const showStatusMessage = (type: string, message: string) => {
 }
 
 .paste-hint {
-  font-size: 11px;
+  font-size: 10px; /* 减小字体 */
   color: #969696;
   margin: 0;
-  padding: 4px 8px;
+  padding: 2px 6px; /* 减少内边距 */
   background: rgba(150, 150, 150, 0.08);
-  border-radius: 3px;
+  border-radius: 2px;
   border-left: 2px solid #007acc;
-  line-height: 1.3;
+  line-height: 1.2; /* 减少行高 */
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .image-preview-area {
-  min-height: 130px;
+  height: 96px; /* 固定高度：80px(图片) + 16px(padding) */
   border: 2px dashed #3e3e42;
   border-radius: 4px;
-  padding: 12px;
+  padding: 8px;
   background: #1e1e1e;
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 .image-previews {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+  height: 100%; /* 占满预览区域高度 */
+  align-items: flex-start; /* 顶部对齐 */
 }
 
 .image-preview {
   position: relative;
-  width: 100px;
+  width: 80px;
+  height: 80px; /* 固定高度，确保与预览区域匹配 */
   background: #252526;
   border: 1px solid #3e3e42;
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .preview-img {
   width: 100%;
-  height: 100px;
+  height: 100%; /* 占满容器高度 */
   object-fit: cover;
   cursor: pointer;
   transition: opacity 0.2s ease;

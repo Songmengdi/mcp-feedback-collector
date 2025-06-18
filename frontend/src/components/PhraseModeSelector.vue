@@ -1,42 +1,6 @@
 <template>
   <!-- 反馈模式选择区域 -->
   <div class="phrase-mode-section">
-    <!-- 场景选择区域 -->
-    <div class="scene-selection-section">
-      <div class="scene-header">
-        <span class="scene-label">工作场景</span>
-        <button type="button" class="scene-manage-btn" @click="openSceneManagement" :disabled="isLoading">
-          <span v-if="isLoading">⏳</span>
-          <span v-else>⚙️</span>
-          管理场景
-        </button>
-      </div>
-      
-      <!-- 场景选择下拉框 -->
-      <div class="scene-selector">
-        <select 
-          v-model="selectedSceneId" 
-          @change="onSceneChange"
-          class="scene-select"
-          :disabled="isLoading || scenesLoading"
-        >
-          <option v-if="scenesLoading" value="">加载场景中...</option>
-          <option v-else-if="!hasScenes" value="">暂无可用场景</option>
-          <option 
-            v-else
-            v-for="scene in sceneOptions" 
-            :key="scene.value"
-            :value="scene.value"
-          >
-            {{ scene.label }}
-          </option>
-        </select>
-        <div v-if="currentScene" class="scene-description">
-          {{ currentScene.description }}
-        </div>
-      </div>
-    </div>
-
     <!-- 模式选择区域 -->
     <div class="phrase-mode-header">
       <span class="phrase-mode-label">反馈模式</span>
@@ -123,15 +87,7 @@ const customPhrase = ref('')
 const isLoading = ref(false)
 
 
-// 场景选择状态
-const selectedSceneId = ref('')
-
-// 计算属性 - 场景相关
-const scenesLoading = computed(() => scenesStore.loading)
-const hasScenes = computed(() => scenesStore.hasScenes)
-const sceneOptions = computed(() => scenesStore.sceneOptions)
-const currentScene = computed(() => scenesStore.currentScene)
-const currentSelection = computed(() => scenesStore.currentSelection)
+// 计算属性 - 模式相关
 const availableModes = computed(() => {
   if (scenesStore.hasModes) {
     return scenesStore.currentSceneModes
@@ -143,6 +99,8 @@ const availableModes = computed(() => {
     { id: 'search', name: '搜索', description: '搜索模式：自动附加信息查找和解决方案的提示词', shortcut: '3' }
   ]
 })
+
+const currentSelection = computed(() => scenesStore.currentSelection)
 
 // 计算属性 - 模式相关
 const currentModeId = computed(() => {
@@ -159,8 +117,9 @@ const currentMode = computed(() => {
 })
 
 const currentModalTitle = computed(() => {
-  if (currentScene.value && currentMode.value) {
-    return `${currentScene.value.name} - ${currentMode.value.name} - 自定义提示词`
+  const currentScene = scenesStore.currentScene
+  if (currentScene && currentMode.value) {
+    return `${currentScene.name} - ${currentMode.value.name} - 自定义提示词`
   }
   return `${currentMode.value?.name || '未知模式'} - 自定义提示词`
 })
@@ -182,24 +141,6 @@ const shortcutPrefix = computed(() => {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
   return isMac ? '⌘' : 'Ctrl'
 })
-
-// 方法 - 场景管理
-const onSceneChange = async () => {
-  if (selectedSceneId.value && selectedSceneId.value !== currentSelection.value.sceneId) {
-    await scenesStore.switchToScene(selectedSceneId.value)
-    // 同步更新传统模式状态
-    appStore.setCurrentPhraseMode(currentSelection.value.modeId)
-  }
-}
-
-const openSceneManagement = () => {
-  // 触发自定义事件，通知父组件切换到场景管理标签页
-  const event = new CustomEvent('openSceneManagement', {
-    bubbles: true,
-    detail: { action: 'open-scene-management' }
-  })
-  document.dispatchEvent(event)
-}
 
 // 方法 - 模式选择
 const selectMode = async (modeId: string) => {
@@ -313,13 +254,10 @@ onMounted(async () => {
     }
   }
   
-  // 同步当前选择状态
-  selectedSceneId.value = currentSelection.value.sceneId
 })
 
 // 监听器
 watch(currentSelection, (newSelection) => {
-  selectedSceneId.value = newSelection.sceneId
   // 同步更新传统模式状态
   appStore.setCurrentPhraseMode(newSelection.modeId)
 }, { deep: true })
@@ -341,99 +279,16 @@ watch(currentModeId, async () => {
 
 <style scoped>
 .phrase-mode-section {
-  margin-top: 16px;
+  margin-top: 8px; /* 减少上边距 */
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
-/* 场景选择区域样式 */
-.scene-selection-section {
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #3e3e42;
-}
-
-.scene-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.scene-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #cccccc;
-}
-
-.scene-manage-btn {
-  padding: 4px 8px;
-  border: 1px solid #007acc;
-  border-radius: 3px;
-  background: transparent;
-  color: #007acc;
-  cursor: pointer;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
-}
-
-.scene-manage-btn:hover {
-  background: #007acc;
-  color: white;
-}
-
-.scene-manage-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.scene-manage-btn:disabled:hover {
-  background: transparent;
-  color: #007acc;
-}
-
-.scene-selector {
-  margin-bottom: 8px;
-}
-
-.scene-select {
-  width: 100%;
-  padding: 8px 12px;
-  background: #1e1e1e;
-  border: 1px solid #3e3e42;
-  border-radius: 4px;
-  color: #cccccc;
-  font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-}
-
-.scene-select:focus {
-  outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 1px #007acc;
-}
-
-.scene-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.scene-description {
-  font-size: 11px;
-  color: #969696;
-  margin-top: 6px;
-  line-height: 1.4;
-  padding-left: 4px;
-}
-
-/* 原有样式保持不变 */
+/* 模式选择样式 */
 .phrase-mode-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 6px; /* 减少下边距 */
 }
 
 .phrase-mode-label {
@@ -478,25 +333,25 @@ watch(currentModeId, async () => {
   background: #1e1e1e;
   border: 1px solid #3e3e42;
   border-radius: 6px;
-  padding: 2px;
-  margin-bottom: 12px;
+  padding: 1px; /* 减少内边距 */
+  margin-bottom: 6px; /* 减少下边距 */
 }
 
 .mode-btn {
   flex: 1;
-  padding: 6px 12px;
+  padding: 4px 8px; /* 减少内边距 */
   border: none;
   background: transparent;
   color: #cccccc;
-  font-size: 12px;
+  font-size: 11px; /* 减小字体 */
   font-weight: 500;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 3px;
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px; /* 减少间距 */
 }
 
 .mode-btn:disabled {
@@ -540,10 +395,10 @@ watch(currentModeId, async () => {
 .mode-hint {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  font-size: 11px;
+  gap: 4px; /* 减少间距 */
+  font-size: 10px; /* 减小字体 */
   color: #969696;
-  line-height: 1.4;
+  line-height: 1.2; /* 减少行高 */
   padding: 6px 0;
 }
 

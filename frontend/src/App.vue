@@ -4,31 +4,6 @@
     <div class="container">
       <!-- 工作汇报内容区域 -->
       <div class="content-area">
-        <!-- 工作汇报控制栏 -->
-        <div class="report-controls">
-          <button 
-            class="refresh-btn" 
-            @click="refreshWorkSummary" 
-            :disabled="isRefreshing"
-            title="刷新最新工作汇报"
-          >
-            <span>{{ isRefreshing ? '刷新中...' : '刷新最新汇报' }}</span>
-          </button>
-          <div class="control-right">
-            <!-- 状态文字显示 -->
-            <div class="refresh-status-text">
-              {{ refreshStatusText }}
-            </div>
-            <!-- 连接状态 -->
-            <div 
-              class="connection-status" 
-              :class="{ connected: connectionStore.isConnected, disconnected: !connectionStore.isConnected }"
-            >
-              {{ connectionStore.connectionStatus }}
-            </div>
-          </div>
-        </div>
-
         <!-- 两栏布局 -->
         <div class="two-column-layout">
           <!-- 左栏：Tab界面 -->
@@ -38,6 +13,7 @@
 
           <!-- 右栏：用户反馈 -->
           <div class="right-column">
+            <SceneSelector />
             <FeedbackForm />
           </div>
         </div>
@@ -61,9 +37,10 @@ import FeedbackForm from './components/FeedbackForm.vue'
 import LeftPanelTabs from './components/LeftPanelTabs.vue'
 import StatusMessage from './components/StatusMessage.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import SceneSelector from './components/SceneSelector.vue'
 import socketService from './services/socket'
 import { useAppStore } from './stores/app'
-import { useConnectionStore } from './stores/connection'
+import { useScenesStore } from './stores/scenes'
 import errorHandler from './services/errorHandler'
 // @ts-ignore - stagewise可能没有完整的TypeScript定义
 import { StagewiseToolbar } from '@stagewise/toolbar-vue'
@@ -76,17 +53,12 @@ const stagewiseConfig = {
 // 是否为开发环境
 const isDevelopment = import.meta.env.DEV
 
-// Store引用
-const connectionStore = useConnectionStore()
 const appStore = useAppStore()
+const scenesStore = useScenesStore()
 
 // 组件引用
 const statusMessageRef = ref<InstanceType<typeof StatusMessage>>()
 const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>()
-
-// 本地状态
-const isRefreshing = ref(false)
-const refreshStatusText = ref('')
 
 // 反馈成功倒计时相关状态
 const feedbackSuccessMessageId = ref<string | null>(null)
@@ -122,24 +94,7 @@ const loadDefaultPhrases = async () => {
   }
 }
 
-// 刷新工作汇报
-const refreshWorkSummary = () => {
-  if (!connectionStore.isConnected) {
-    showStatusMessage('error', '连接已断开，请刷新页面重试')
-    return
-  }
 
-  isRefreshing.value = true
-  refreshStatusText.value = '正在获取最新工作汇报...'
-  
-  socketService.requestLatestSummary()
-
-  // 5秒后重置状态
-  setTimeout(() => {
-    isRefreshing.value = false
-    refreshStatusText.value = ''
-  }, 5000)
-}
 
 // 显示状态消息
 const showStatusMessage = (type: 'success' | 'error' | 'warning' | 'info', message: string, autoRemove = true) => {
@@ -189,6 +144,14 @@ onMounted(async () => {
   
   // 加载默认提示词
   await loadDefaultPhrases()
+  
+  // 初始化场景数据
+  try {
+    await scenesStore.loadScenes()
+    console.log('场景数据加载完成')
+  } catch (error) {
+    console.error('场景数据加载失败:', error)
+  }
   
   // 初始化快捷语模式
   appStore.setCurrentPhraseMode('discuss')
@@ -261,73 +224,7 @@ body {
   overflow: hidden;
 }
 
-.report-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  margin-bottom: 16px;
-  border-bottom: 1px solid #3e3e42;
-  min-height: 44px;
-}
 
-.refresh-btn {
-  background: #0e639c;
-  color: white;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  display: flex;
-  align-items: center;
-  height: 40px;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  background: #1177bb;
-}
-
-.refresh-btn:disabled {
-  background: #5a5a5a;
-  color: #969696;
-  cursor: not-allowed;
-}
-
-.control-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  height: 100%;
-}
-
-.refresh-status-text {
-  font-size: 12px;
-  color: #969696;
-}
-
-.connection-status {
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  height: 32px;
-}
-
-.connection-status.connected {
-  background-color: #0e639c;
-  color: #ffffff;
-}
-
-.connection-status.disconnected {
-  background-color: #f14c4c;
-  color: #ffffff;
-}
 
 .two-column-layout {
   display: flex;
@@ -351,6 +248,10 @@ body {
   min-height: 600px;
 }
 
+.right-column {
+  gap: 12px; /* 组件间距 */
+}
+
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .two-column-layout {
@@ -370,15 +271,7 @@ body {
     padding: 10px;
   }
 
-  .report-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  
-  .control-right {
-    justify-content: space-between;
-  }
+
 }
 
 /* 滚动条样式 */

@@ -5,6 +5,19 @@
         <span>🤖</span>
         AI工作汇报
       </div>
+      <div class="card-controls">
+        <div class="refresh-status-text">
+          {{ refreshStatusText }}
+        </div>
+        <button 
+          class="refresh-btn" 
+          @click="handleRefresh" 
+          :disabled="isRefreshing"
+          title="刷新最新工作汇报"
+        >
+          <span>{{ isRefreshing ? '刷新中...' : '刷新汇报' }}</span>
+        </button>
+      </div>
     </div>
     <div class="card-body">
       <!-- 默认状态：等待工作汇报 -->
@@ -29,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, inject } from 'vue'
 import socketService from '../services/socket'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
@@ -37,6 +50,13 @@ import { useFeedbackStore } from '../stores/feedback'
 // Store引用
 const feedbackStore = useFeedbackStore()
 const connectionStore = useConnectionStore()
+
+// 本地状态
+const isRefreshing = ref(false)
+const refreshStatusText = ref('')
+
+// 注入全局状态消息方法
+const showStatusMessage = inject<(type: string, message: string, autoRemove?: boolean) => string | undefined>('showStatusMessage')
 
 // 计算属性
 const hasWorkSummary = computed(() => {
@@ -54,26 +74,31 @@ const handleRefresh = () => {
   console.log('手动刷新工作汇报')
 
   if (!connectionStore.isConnected) {
-    showStatusMessage('error', '连接已断开，请刷新页面重试')
+    if (showStatusMessage) {
+      showStatusMessage('error', '连接已断开，请刷新页面重试')
+    }
     return
   }
 
   if (!socketService.getSocket()) {
-    showStatusMessage('error', 'Socket连接未初始化')
+    if (showStatusMessage) {
+      showStatusMessage('error', 'Socket连接未初始化')
+    }
     return
   }
 
-  // 显示刷新状态
-  showStatusMessage('info', '正在获取最新工作汇报...')
+  // 设置刷新状态
+  isRefreshing.value = true
+  refreshStatusText.value = '正在获取最新工作汇报...'
 
   // 请求最新的工作汇报
   socketService.requestLatestSummary()
-}
 
-// 显示状态消息（临时实现）
-const showStatusMessage = (type: string, message: string) => {
-  console.log(`[${type.toUpperCase()}] ${message}`)
-  // TODO: 集成StatusMessage组件
+  // 5秒后重置状态
+  setTimeout(() => {
+    isRefreshing.value = false
+    refreshStatusText.value = ''
+  }, 5000)
 }
 </script>
 
@@ -92,16 +117,54 @@ const showStatusMessage = (type: string, message: string) => {
 
 .card-header {
   margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .card-title {
   color: #ffffff;
   font-size: 18px;
-  margin-bottom: 15px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.card-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.refresh-status-text {
+  font-size: 12px;
+  color: #969696;
+  min-width: 120px;
+  text-align: right;
+}
+
+.refresh-btn {
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.refresh-btn:disabled {
+  background: #5a5a5a;
+  color: #969696;
+  cursor: not-allowed;
 }
 
 .card-body {

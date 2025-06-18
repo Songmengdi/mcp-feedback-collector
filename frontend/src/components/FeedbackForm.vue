@@ -6,17 +6,21 @@
         您的反馈
       </div>
     </div>
-    <div class="feedback-body">
+    <div class="feedback-body" ref="feedbackBodyRef">
       <form @submit.prevent="handleSubmit">
-        <div class="form-group">
+        <div class="form-group textarea-group">
           <label class="form-label">反馈内容</label>
           <textarea
+            ref="textareaRef"
             v-model="feedbackText"
             class="form-textarea"
             :placeholder="placeholderText"
+            :style="{ height: textareaHeight }"
             @paste="handlePaste"
           ></textarea>
+        </div>
 
+        <div class="form-group phrase-mode-group">
           <!-- 快捷语选项 -->
           <PhraseModeSelector />
         </div>
@@ -70,6 +74,9 @@ const appStore = useAppStore()
 // 本地状态
 const feedbackText = ref('')
 const isSubmitting = ref(false)
+const textareaHeight = ref('120px') // 动态计算的textarea高度
+const feedbackBodyRef = ref<HTMLElement>()
+const textareaRef = ref<HTMLTextAreaElement>()
 
 // 计算属性
 const shortcutText = computed(() => {
@@ -300,6 +307,54 @@ const showStatusMessage = (type: string, message: string) => {
   // TODO: 集成StatusMessage组件
 }
 
+// 动态计算textarea高度
+const calculateTextareaHeight = () => {
+  if (!feedbackBodyRef.value) return
+
+  try {
+    const container = feedbackBodyRef.value
+    const containerHeight = container.clientHeight
+    
+    // 计算其他组件的高度
+    const formLabel = container.querySelector('.form-label') as HTMLElement
+    const phraseModeGroup = container.querySelector('.phrase-mode-group') as HTMLElement
+    const imageUploadGroup = container.querySelector('.form-group:nth-child(3)') as HTMLElement // 图片上传组
+    const buttonGroup = container.querySelector('.button-group') as HTMLElement
+    
+    let usedHeight = 0
+    
+    // 计算已使用的高度
+    if (formLabel) usedHeight += formLabel.offsetHeight + 8 // label + margin
+    if (phraseModeGroup) usedHeight += phraseModeGroup.offsetHeight + 12 // phrase-mode + margin
+    if (imageUploadGroup) usedHeight += imageUploadGroup.offsetHeight + 12 // image-upload + margin
+    if (buttonGroup) usedHeight += buttonGroup.offsetHeight + 8 // button-group + margin
+    
+    // 计算剩余可用高度
+    const availableHeight = containerHeight - usedHeight
+    const minHeight = 120 // 最小高度
+    
+    // 使用剩余高度，但不小于最小高度
+    const calculatedHeight = Math.max(availableHeight, minHeight)
+    
+    textareaHeight.value = `${calculatedHeight - 30}px` // 减去30px，进行高度冗余
+  } catch (error) {
+    console.warn('高度计算失败，使用默认高度:', error)
+    textareaHeight.value = '120px'
+  }
+}
+
+// 防抖函数
+const debounce = (func: Function, wait: number) => {
+  let timeout: number
+  return (...args: any[]) => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => func.apply(null, args), wait)
+  }
+}
+
+// 防抖的高度计算函数
+const debouncedCalculateHeight = debounce(calculateTextareaHeight, 100)
+
 // 快捷键处理
 const handleKeydown = (e: KeyboardEvent) => {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
@@ -355,16 +410,41 @@ const handleKeydown = (e: KeyboardEvent) => {
 // 生命周期
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  
+  // 添加窗口尺寸变化监听
+  window.addEventListener('resize', debouncedCalculateHeight)
+  
+  // 添加容器尺寸变化监听
+  let resizeObserver: ResizeObserver | null = null
+  if (feedbackBodyRef.value && 'ResizeObserver' in window) {
+    resizeObserver = new ResizeObserver(debouncedCalculateHeight)
+    resizeObserver.observe(feedbackBodyRef.value)
+  }
+  
   nextTick(() => {
     const textarea = document.querySelector('.form-textarea') as HTMLTextAreaElement
     if (textarea) {
       textarea.focus()
     }
+    
+    // 初始计算高度
+    setTimeout(calculateTextareaHeight, 100)
   })
+  
+  // 保存resizeObserver引用用于清理
+  ;(window as any)._feedbackResizeObserver = resizeObserver
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', debouncedCalculateHeight)
+  
+  // 清理ResizeObserver
+  const resizeObserver = (window as any)._feedbackResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    delete (window as any)._feedbackResizeObserver
+  }
 })
 </script>
 
@@ -375,9 +455,11 @@ onUnmounted(() => {
   border: 1px solid #3e3e42;
   border-radius: 6px;
   padding: 20px;
-  height: 100%;
+  flex: 1; /* 占据剩余空间 */
   display: flex;
   flex-direction: column;
+  min-height: 0; /* 允许收缩 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 .feedback-header {
@@ -396,11 +478,24 @@ onUnmounted(() => {
 
 .feedback-body {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto; 
+  min-height: 0; /* 确保可以收缩 */
+  display: flex;
+  flex-direction: column;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 12px; /* 减少间距 */
+}
+
+.form-group:last-child {
+  margin-bottom: 0; /* 最后一个组件无下边距 */
+  flex-shrink: 0; /* 按钮组不被压缩 */
+}
+
+/* PhraseModeSelector所在的form-group也不应被压缩 */
+.form-group.phrase-mode-group {
+  flex-shrink: 0;
 }
 
 .form-label {
@@ -409,6 +504,13 @@ onUnmounted(() => {
   font-size: 14px;
   margin-bottom: 8px;
   font-weight: 500;
+}
+
+.textarea-group {
+  flex: 1; /* 让包含textarea的组占据剩余空间 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .form-textarea {
@@ -420,9 +522,10 @@ onUnmounted(() => {
   color: #cccccc;
   font-size: 14px;
   font-family: inherit;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, height 0.2s ease;
   resize: none;
-  min-height: 200px;
+  /* 移除flex和固定高度限制，使用动态绑定的height */
+  min-height: 120px; /* 保留最小高度作为fallback */
 }
 
 .form-textarea:focus {
@@ -435,6 +538,8 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+  flex-shrink: 0; /* 确保按钮组不被压缩 */
+  margin-top: 8px; /* 添加上边距 */
 }
 
 .btn {
