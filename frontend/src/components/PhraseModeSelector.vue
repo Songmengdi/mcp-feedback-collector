@@ -191,10 +191,20 @@ const handleModalClick = (e: Event) => {
 
 const getCustomQuickPhrase = async (): Promise<string> => {
   try {
+    console.log('[PhraseModeSelector] 获取自定义提示词，当前选择:', {
+      sceneId: currentSelection.value.sceneId,
+      modeId: currentSelection.value.modeId,
+      sceneName: scenesStore.currentScene?.name,
+      modeName: currentMode.value?.name
+    })
+    
     // 使用场景化API获取提示词
     const prompt = await promptService.getUnifiedPrompt(currentSelection.value)
+    
+    console.log('[PhraseModeSelector] 成功获取提示词，长度:', prompt.length)
     return prompt
   } catch (error) {
+    console.error('[PhraseModeSelector] 获取提示词失败:', error)
     // 错误已通过全局错误处理器显示，网络错误时回退到默认提示词
     return currentMode.value?.description || '默认提示词'
   }

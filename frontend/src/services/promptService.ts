@@ -315,16 +315,9 @@ export class PromptService {
    */
   async getUnifiedPrompt(selection: CurrentSelection): Promise<string> {
     try {
-      // 首先检查缓存
-      const cached = this.getCachedScenePrompt(selection.sceneId, selection.modeId);
-      if (cached) {
-        console.log(`[PromptService] 使用缓存提示词: ${selection.sceneId}/${selection.modeId}`);
-        return cached;
-      }
-
-          // 缓存未命中，调用统一API
-    console.log(`[PromptService] 从统一API获取提示词: ${selection.sceneId}/${selection.modeId}`);
-    const response = await fetch(`${this.UNIFIED_API_BASE}/prompt?scene=${selection.sceneId}&mode=${selection.modeId}`);
+      // 直接调用统一API，不使用缓存
+      console.log(`[PromptService] 直接从统一API获取提示词: ${selection.sceneId}/${selection.modeId}`);
+      const response = await fetch(`${this.UNIFIED_API_BASE}/prompt?scene=${selection.sceneId}&mode=${selection.modeId}`);
       
       if (!response.ok) {
         await this.handleApiError(response);
@@ -338,19 +331,12 @@ export class PromptService {
 
       const prompt = result.data?.prompt || '';
       
-      // 更新缓存
-      this.setCachedScenePrompt(selection.sceneId, selection.modeId, prompt);
+      console.log(`[PromptService] 成功获取提示词: ${selection.sceneId}/${selection.modeId}, 长度: ${prompt.length}`);
       
       return prompt;
     } catch (error) {
-      // 网络错误时尝试使用过期缓存
-      const expiredCache = this.getCachedScenePrompt(selection.sceneId, selection.modeId, true);
-      if (expiredCache) {
-        console.warn(`[PromptService] 使用过期缓存: ${selection.sceneId}/${selection.modeId}`);
-        return expiredCache;
-      }
-      
-      // 错误已在handleApiError中处理
+      console.error(`[PromptService] 获取提示词失败: ${selection.sceneId}/${selection.modeId}`, error);
+      // 直接抛出错误，不使用缓存回退
       throw error;
     }
   }

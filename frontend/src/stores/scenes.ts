@@ -76,14 +76,19 @@ export const useScenesStore = defineStore('scenes', () => {
       const scenesData = await promptService.getAllScenes()
       scenes.value = scenesData
       
-      // 如果当前选择的场景不存在，切换到第一个场景
-      if (!scenes.value.find(s => s.id === currentSelection.value.sceneId)) {
-        if (scenes.value.length > 0) {
-          await switchToScene(scenes.value[0].id)
-        }
+      console.log('[ScenesStore] 场景数据加载完成:', scenesData.map(s => ({ id: s.id, name: s.name, isDefault: s.isDefault })))
+      
+      // 优先选择数据库中的默认场景
+      const defaultScene = scenes.value.find(s => s.isDefault)
+      const targetScene = defaultScene || scenes.value[0]
+      
+      if (targetScene) {
+        console.log('[ScenesStore] 切换到目标场景:', targetScene.id, targetScene.name)
+        await switchToScene(targetScene.id)
       } else {
-        // 加载当前场景的模式
-        await loadSceneModes(currentSelection.value.sceneId)
+        console.warn('[ScenesStore] 没有可用的场景')
+        currentSelection.value = { sceneId: '', modeId: '' }
+        currentSceneModes.value = []
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '加载场景失败'
@@ -98,17 +103,28 @@ export const useScenesStore = defineStore('scenes', () => {
    * 加载指定场景的模式
    */
   const loadSceneModes = async (sceneId: string): Promise<void> => {
+    console.log('[ScenesStore] 开始加载场景模式:', sceneId)
+    
     try {
       const modes = await promptService.getSceneModes(sceneId)
       // 按快捷键排序
       currentSceneModes.value = sortSceneModes(modes)
       
+      console.log('[ScenesStore] 场景模式加载完成:', {
+        sceneId,
+        modesCount: modes.length,
+        modes: modes.map(m => ({ id: m.id, name: m.name, isDefault: m.isDefault }))
+      })
+      
       // 如果当前选择的模式不存在，切换到默认模式或第一个模式
       if (!currentSceneModes.value.find(m => m.id === currentSelection.value.modeId)) {
         const defaultMode = currentSceneModes.value.find(m => m.isDefault) || currentSceneModes.value[0]
         if (defaultMode) {
+          console.log('[ScenesStore] 切换到默认模式:', { modeId: defaultMode.id, modeName: defaultMode.name })
           currentSelection.value.modeId = defaultMode.id
         }
+      } else {
+        console.log('[ScenesStore] 保持当前模式:', currentSelection.value.modeId)
       }
     } catch (err) {
       console.error(`[ScenesStore] 加载场景模式失败 (${sceneId}):`, err)
@@ -326,10 +342,21 @@ export const useScenesStore = defineStore('scenes', () => {
    * 切换到指定场景
    */
   const switchToScene = async (sceneId: string): Promise<void> => {
-    if (currentSelection.value.sceneId === sceneId) return
+    console.log('[ScenesStore] 切换场景请求:', { from: currentSelection.value.sceneId, to: sceneId })
+    
+    if (currentSelection.value.sceneId === sceneId) {
+      console.log('[ScenesStore] 场景未变化，跳过切换')
+      return
+    }
     
     currentSelection.value.sceneId = sceneId
     await loadSceneModes(sceneId)
+    
+    console.log('[ScenesStore] 场景切换完成:', {
+      sceneId: currentSelection.value.sceneId,
+      modeId: currentSelection.value.modeId,
+      modesCount: currentSceneModes.value.length
+    })
   }
   
   /**
