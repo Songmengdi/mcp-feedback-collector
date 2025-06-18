@@ -36,17 +36,7 @@ export const useAppStore = defineStore('app', () => {
     return await confirmDialogRef.value.show(options)
   }
   
-  // ===== 向后兼容的模式管理 =====
-  
-  // 当前快捷语模式 (向后兼容)
-  const currentPhraseMode = ref<string>('discuss')
-  
-  // 默认快捷语内容 (向后兼容)
-  const defaultPhrases = ref<Record<string, string>>({
-    discuss: '对之前的所有过程,做一个整体的总结性的归纳,并且明确最近一段时间我们的核心聚焦点是什么,思考接下来我们需要做什么',
-    edit: '根据之前步骤及需求,完成编码',
-    search: '深入研究相关代码'
-  })
+  // ===== 向后兼容代码已移除 =====
   
   // ===== 其他状态保持不变 =====
   
@@ -77,18 +67,7 @@ export const useAppStore = defineStore('app', () => {
   
   // ===== 场景化管理方法已移至scenesStore =====
   
-  // ===== 向后兼容方法 =====
-  
-  // 设置快捷语模式 (向后兼容)
-  const setCurrentPhraseMode = (mode: string) => {
-    currentPhraseMode.value = mode
-    // 场景化选择现在由scenesStore管理，这里只保持向后兼容
-  }
-  
-  // 设置默认快捷语 (向后兼容)
-  const setDefaultPhrases = (phrases: Record<string, string>) => {
-    defaultPhrases.value = phrases
-  }
+  // ===== 向后兼容方法已移除 =====
   
   // ===== 其他方法保持不变 =====
   
@@ -116,10 +95,8 @@ export const useAppStore = defineStore('app', () => {
     // ===== 确认对话框状态 =====
     confirmDialogRef,
     
-    // ===== 向后兼容状态 =====
+    // ===== 应用状态 =====
     currentTab,
-    currentPhraseMode,
-    defaultPhrases,
     autoRefreshInterval,
     autoRefreshCountdown,
     autoRefreshTimer,
@@ -130,10 +107,8 @@ export const useAppStore = defineStore('app', () => {
     setConfirmDialogRef,
     showConfirm,
     
-    // ===== 向后兼容方法 =====
+    // ===== 应用方法 =====
     setCurrentTab,
-    setCurrentPhraseMode,
-    setDefaultPhrases,
     setAutoRefreshCountdown,
     setLastWorkSummary,
     setReceivedPrompt,

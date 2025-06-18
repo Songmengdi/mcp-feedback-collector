@@ -60,7 +60,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import socketService from '../services/socket'
 import promptService from '../services/promptService'
 import shortcutService from '../services/shortcutService'
-import { useAppStore } from '../stores/app'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
 import { useScenesStore } from '../stores/scenes'
@@ -71,7 +70,6 @@ import PhraseModeSelector from './PhraseModeSelector.vue'
 // Store引用
 const feedbackStore = useFeedbackStore()
 const connectionStore = useConnectionStore()
-const appStore = useAppStore()
 const scenesStore = useScenesStore()
 
 // 本地状态
@@ -136,11 +134,11 @@ const getCustomQuickPhrase = async (): Promise<string> => {
     // 使用场景化API获取提示词 - 修复：使用scenesStore.currentSelection而不是appStore.currentSelection
     const selection = { sceneId: scenesStore.currentSelection.sceneId, modeId: scenesStore.currentSelection.modeId }
     const prompt = await promptService.getUnifiedPrompt(selection)
-    return prompt || appStore.defaultPhrases[appStore.currentPhraseMode]
+    return prompt || ''
   } catch (error) {
-    console.error('获取提示词失败，使用默认提示词:', error)
-    // 网络错误时回退到默认提示词
-    return appStore.defaultPhrases[appStore.currentPhraseMode]
+    console.error('获取提示词失败:', error)
+    // 网络错误时返回空字符串
+    return ''
   }
 }
 

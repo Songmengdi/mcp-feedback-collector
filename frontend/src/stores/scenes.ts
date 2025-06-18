@@ -365,19 +365,6 @@ export const useScenesStore = defineStore('scenes', () => {
   const switchToMode = (modeId: string): void => {
     if (currentSceneModes.value.find(m => m.id === modeId)) {
       currentSelection.value.modeId = modeId
-      
-      // 同步更新appStore的向后兼容状态
-      try {
-        // 使用动态import避免循环依赖
-        import('./app').then(({ useAppStore }) => {
-          const appStore = useAppStore()
-          appStore.setCurrentPhraseMode(modeId)
-        }).catch(error => {
-          console.warn('同步appStore状态失败:', error)
-        })
-      } catch (error) {
-        console.warn('同步appStore状态失败:', error)
-      }
     }
   }
   
