@@ -7,4 +7,5 @@ export const pinia = createPinia()
 export { useAppStore } from './app'
 export { useConnectionStore } from './connection'
 export { useFeedbackStore } from './feedback'
+export { useScenesStore } from './scenes'
 

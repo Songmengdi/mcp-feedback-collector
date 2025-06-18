@@ -141,3 +141,57 @@ export enum TransportMode {
   STDIO = 'stdio',                    // 标准输入输出
   MCP = 'mcp'                         // MCP HTTP模式（原streamable_http）
 }
+
+// ===== 场景化相关类型定义 =====
+
+// 场景定义
+export interface Scene {
+  id: string;
+  name: string;
+  description: string;
+  icon?: string;
+  is_default: boolean;  // 数据库字段使用下划线命名
+  sort_order: number;   // 数据库字段使用下划线命名
+  created_at: number;
+  updated_at: number;
+}
+
+// 场景模式定义
+export interface SceneMode {
+  id: string;
+  scene_id: string;     // 数据库字段使用下划线命名
+  name: string;
+  description: string;
+  shortcut?: string;
+  is_default: boolean;  // 数据库字段使用下划线命名
+  sort_order: number;   // 数据库字段使用下划线命名
+  created_at: number;
+  updated_at: number;
+}
+
+// 场景提示词定义
+export interface ScenePrompt {
+  scene_id: string;     // 数据库字段使用下划线命名
+  mode_id: string;      // 数据库字段使用下划线命名
+  prompt: string;
+  created_at: number;
+  updated_at: number;
+}
+
+// 场景创建/更新请求（前端发送的格式，使用驼峰命名）
+export interface SceneRequest {
+  name: string;
+  description: string;
+  icon?: string;
+  isDefault?: boolean;  // 前端使用驼峰命名
+  sortOrder?: number;   // 前端使用驼峰命名
+}
+
+// 场景模式创建/更新请求（前端发送的格式，使用驼峰命名）
+export interface SceneModeRequest {
+  name: string;
+  description: string;
+  shortcut?: string;
+  isDefault?: boolean;  // 前端使用驼峰命名
+  sortOrder?: number;   // 前端使用驼峰命名
+}

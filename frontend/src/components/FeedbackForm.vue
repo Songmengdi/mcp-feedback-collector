@@ -123,8 +123,9 @@ const applyQuickPhraseToFeedback = async (text: string): Promise<string> => {
 // 获取自定义快捷语
 const getCustomQuickPhrase = async (): Promise<string> => {
   try {
-    // 优先从API获取（包含缓存逻辑）
-    const prompt = await promptService.getPrompt(appStore.currentPhraseMode)
+    // 使用场景化API获取提示词
+    const selection = { sceneId: 'coding', modeId: appStore.currentPhraseMode }
+    const prompt = await promptService.getUnifiedPrompt(selection)
     return prompt || appStore.defaultPhrases[appStore.currentPhraseMode]
   } catch (error) {
     console.error('获取提示词失败，使用默认提示词:', error)

@@ -47,6 +47,9 @@
     <!-- 全局状态消息组件 -->
     <StatusMessage ref="statusMessageRef" />
     
+    <!-- 全局确认对话框组件 -->
+    <ConfirmDialog ref="confirmDialogRef" />
+    
     <!-- Stagewise开发工具栏 (仅在开发环境显示) -->
     <StagewiseToolbar v-if="isDevelopment" :config="stagewiseConfig" />
   </div>
@@ -57,9 +60,11 @@ import { onMounted, onUnmounted, provide, ref } from 'vue'
 import FeedbackForm from './components/FeedbackForm.vue'
 import LeftPanelTabs from './components/LeftPanelTabs.vue'
 import StatusMessage from './components/StatusMessage.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import socketService from './services/socket'
 import { useAppStore } from './stores/app'
 import { useConnectionStore } from './stores/connection'
+import errorHandler from './services/errorHandler'
 // @ts-ignore - stagewise可能没有完整的TypeScript定义
 import { StagewiseToolbar } from '@stagewise/toolbar-vue'
 
@@ -77,6 +82,7 @@ const appStore = useAppStore()
 
 // 组件引用
 const statusMessageRef = ref<InstanceType<typeof StatusMessage>>()
+const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>()
 
 // 本地状态
 const isRefreshing = ref(false)
@@ -186,6 +192,14 @@ onMounted(async () => {
   
   // 初始化快捷语模式
   appStore.setCurrentPhraseMode('discuss')
+  
+  // 设置确认对话框引用到store
+  if (confirmDialogRef.value) {
+    appStore.setConfirmDialogRef(confirmDialogRef.value)
+  }
+  
+  // 初始化全局错误处理器
+  errorHandler.init(showStatusMessage)
   
   // 初始化Socket连接
   socketService.initializeSocket()
