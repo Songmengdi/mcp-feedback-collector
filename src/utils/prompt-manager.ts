@@ -211,6 +211,12 @@ export class PromptManager {
         );
       }
 
+      // 如果要设置为默认场景，先清除所有场景的默认状态
+      if (sceneRequest.isDefault === true) {
+        logger.debug('设置为默认场景 - 先清除所有场景的默认状态');
+        this.database.clearAllScenesDefault();
+      }
+
       const now = Date.now();
       const sceneData = {
         id: `scene_${now}_${Math.random().toString(36).substr(2, 9)}`,
@@ -251,9 +257,25 @@ export class PromptManager {
   /**
    * 更新场景
    */
-  updateScene(sceneId: string, name: string, description: string): Scene | null {
+  updateScene(sceneId: string, sceneRequest: Partial<SceneRequest>): Scene | null {
     try {
-      const updateData = { name, description };
+      logger.debug('接收到场景更新请求:', { sceneId, sceneRequest });
+      
+      // 如果要设置为默认场景，先清除所有场景的默认状态
+      if (sceneRequest.isDefault === true) {
+        logger.debug('设置为默认场景 - 先清除所有场景的默认状态');
+        this.database.clearAllScenesDefault();
+      }
+      
+      // 构建更新数据，转换驼峰命名为下划线命名
+      const updateData: any = {};
+      if (sceneRequest.name !== undefined) updateData.name = sceneRequest.name;
+      if (sceneRequest.description !== undefined) updateData.description = sceneRequest.description;
+      if (sceneRequest.icon !== undefined) updateData.icon = sceneRequest.icon;
+      if (sceneRequest.isDefault !== undefined) updateData.is_default = sceneRequest.isDefault;
+      if (sceneRequest.sortOrder !== undefined) updateData.sort_order = sceneRequest.sortOrder;
+      
+      logger.debug('准备更新的场景数据:', updateData);
       this.database.updateScene(sceneId, updateData);
       logger.info(`场景已更新 (id: ${sceneId})`);
       
@@ -264,7 +286,7 @@ export class PromptManager {
       throw new MCPError(
         `Failed to update scene: ${sceneId}`,
         'SCENE_UPDATE_ERROR',
-        { sceneId, name, description, error }
+        { sceneId, sceneRequest, error }
       );
     }
   }

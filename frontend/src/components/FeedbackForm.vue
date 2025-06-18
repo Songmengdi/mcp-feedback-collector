@@ -353,42 +353,36 @@ const debounce = (func: Function, wait: number) => {
 // 防抖的高度计算函数
 const debouncedCalculateHeight = debounce(calculateTextareaHeight, 100)
 
-// 快捷键处理 - 重构为使用统一的快捷键服务
+// 快捷键处理 - 只处理表单相关的快捷键，模式切换由shortcutService统一处理
 const handleKeydown = (e: KeyboardEvent) => {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
   const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey
   
-  // 检查是否按下了 Cmd+Enter (Mac) 或 Ctrl+Enter (Windows)
-  const isSubmitShortcut = isCtrlOrCmd && e.key === 'Enter'
+  // 检查当前焦点是否在反馈表单区域内
+  const activeElement = document.activeElement
+  const formElement = document.querySelector('.feedback-card')
+  const isInForm = formElement && formElement.contains(activeElement)
   
-  if (isSubmitShortcut) {
-    // 检查当前焦点是否在反馈表单区域内
-    const activeElement = document.activeElement
-    const formElement = document.querySelector('.feedback-card')
-    
-    // 如果焦点在表单内，触发提交
-    if (formElement && formElement.contains(activeElement)) {
-      e.preventDefault()
-      handleSubmit()
-    }
+  if (!isInForm) {
+    return // 不在表单内，不处理任何快捷键
+  }
+  
+  // 检查是否按下了 Cmd+Enter (Mac) 或 Ctrl+Enter (Windows) - 提交表单
+  if (isCtrlOrCmd && e.key === 'Enter') {
+    e.preventDefault()
+    handleSubmit()
     return
   }
   
-  // 快捷键模式切换现在由shortcutService统一处理
-  // 这里不再需要硬编码的快捷键处理逻辑
-  
   // 检查清空表单快捷键 (Ctrl/Cmd + Backspace)
   if (isCtrlOrCmd && e.key === 'Backspace') {
-    // 检查当前焦点是否在反馈表单区域内
-    const activeElement = document.activeElement
-    const formElement = document.querySelector('.feedback-card')
-    
-    // 如果焦点在表单内，触发清空
-    if (formElement && formElement.contains(activeElement)) {
-      e.preventDefault()
-      clearForm()
-    }
+    e.preventDefault()
+    clearForm()
+    return
   }
+  
+  // 所有其他快捷键（包括数字键模式切换）由 shortcutService 统一处理
+  // 这里不再拦截任何其他按键事件
 }
 
 // 生命周期
@@ -398,15 +392,32 @@ onMounted(() => {
   
   // 监听场景模式变化，更新快捷键绑定
   const updateShortcutBindings = () => {
-    if (scenesStore.hasModes) {
+    if (scenesStore.hasModes && scenesStore.currentSceneModes.length > 0) {
       shortcutService.updateBindings(scenesStore.currentSceneModes)
     }
   }
   
-  // 初始更新
-  updateShortcutBindings()
+  // 等待场景数据加载完成后再初始化快捷键绑定
+  const initializeShortcuts = async () => {
+    // 如果场景数据已经加载，直接更新
+    if (scenesStore.hasModes && scenesStore.currentSceneModes.length > 0) {
+      updateShortcutBindings()
+    } else {
+      // 否则等待数据加载
+      // 监听场景数据变化
+      const unsubscribe = scenesStore.$subscribe((_, state) => {
+        if (state.currentSceneModes.length > 0) {
+          updateShortcutBindings()
+          unsubscribe() // 只需要初始化一次
+        }
+      })
+    }
+  }
   
-  // 监听模式变化
+  // 初始化快捷键绑定
+  initializeShortcuts()
+  
+  // 监听后续的模式变化
   scenesStore.$subscribe(() => {
     updateShortcutBindings()
   })

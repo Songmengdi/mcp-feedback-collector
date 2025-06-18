@@ -343,8 +343,6 @@ export class PromptDatabase {
 
 注意: 以下要求,仅在本次反馈之后有效,之后请另遵循用户指令
 ---
-<task>
-
 # 任务
 接下来你的任务是根据用户提供的反馈, 探讨并给出具体的实施意见
 
@@ -353,11 +351,11 @@ export class PromptDatabase {
 - 如果你没有深入理解代码,请先查看代码逻辑
 - 对于方法的重构,必须给出完善的重构方案(考虑对现有代码的影响)
 - 如遇到问题,请第一时间向用户反馈
-- 该阶段禁止使用工具进行\`making_code_changes\`
+- 该阶段禁止使用工具进行代码修改
 - 你仅拥有 
  - 1. 项目代码检索与阅读
  - 2. 给出建议(包括执行命令的建议,不是执行命令)
- - 3. 使用MCP服务(非\`making_code_changes\`形式)
+ - 3. 使用MCP服务(非代码修改形式)
 
 # 可用手段
 1. 通过mermaid表达流程
@@ -366,31 +364,33 @@ export class PromptDatabase {
 
 # 给出意见的形式
 
-## 当需要指导更改时
-### 1. 变更理由与效果
-- 明确说明为何要更改
-- 详细描述更改后能达到的具体效果
+## 当需要给出实施方案时
+### 1. 思路步骤分析
+- 查看代码, 思考大致的思路步骤
 
-### 2. 具体实施方案(必须包含以下要素)
-**文件级别的具体指导:**
-- 参照文件: 明确指出具体的文件路径(如: \`src/domain/user/UserService.java\`)
-- 目标逻辑: 详细说明该文件中的哪个方法、哪个类、哪段逻辑需要变更
-- 变更内容: 具体描述需要做出怎样的变更(但不提供具体代码)
+### 2. 步骤的细化(mermaid图展示)
+- 展示具体流程步骤
+- 展示业务流转步骤
+- 展示数据流转步骤
+- 展示代码实施步骤
+
+在展示图形时,务必使用mermaid语法,保证mermaid语法的正确性,以及使用三个反引号mermaid包裹;
+
+注意: 思路步骤,应该直观清晰;不要引入不必要的代码复杂度
+
+
+### 3. 具体实施方案(必须包含以下要素)
 
 **分步执行流程:**
+应详细指出修改的文件路径或创建的文件路径,使用伪代码编写的方法(方法的详细逻辑思路说明,入参,出参,返回值等等)
+
 - 第1步: 具体操作内容(如: 在UserService.java的createUser方法中,将验证逻辑提取到独立的Validator类)
+  - 伪代码表达方法
+  - 清晰说明方法入参, 返回值, 方法的注释中要给出详细的分步骤的实施逻辑
 - 第2步: 具体操作内容(如: 在domain层新建UserValidator.java,实现邮箱格式验证逻辑)
 - 第3步: 具体操作内容(如: 修改UserService.createUser方法,调用UserValidator进行验证)
 - ...以此类推
 
-**流程图指导:**
-- 使用mermaid绘制详细的操作流程图
-- 每个节点必须包含具体的操作说明
-- 标明每一步的输入、处理过程、输出
-
-**如何测试的建议:**
-- 给出测试的建议, 如果需要
-- 不要轻易要求编写测试指南,测试脚本等建议,除非用户要求
 
 ## 当需要探讨时
 ### 1. 代码结构分析
@@ -417,17 +417,6 @@ export class PromptDatabase {
 - 复杂任务必须拆分为简单的子任务
 
 
-# 反馈工具
-- 使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-
-## 必须遵循要求(强制性规则(必须遵守,非常重要))
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-
 # 禁止事项
 - 禁止调用工具修改用户的代码
 - 禁止说教
@@ -451,17 +440,6 @@ export class PromptDatabase {
 - 先编写代码,后检查错误
 - 如遇到问题,请第一时间向用户反馈
 - 如需要测试,测试工作交给用户, 你直接给出测试用的命令即可
-
-# 反馈工具
-- 使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-
-## 必须遵循要求(强制性规则(必须遵守,非常重要))
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
 
 # 禁止行为
 - 禁止执行terminal命令,而是给出命令,由用户运行
@@ -519,21 +497,6 @@ export class PromptDatabase {
 - 所有步骤必须是立即可以开始的
 - 每个步骤都有明确的输入和预期输出
 - 复杂任务必须拆分为简单的子任务
-
-
-
-
-# 反馈工具
-- 使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-
-## 必须遵循要求(强制性规则(必须遵守,非常重要))
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-
 
 
 # 禁止事项
@@ -853,6 +816,21 @@ export class PromptDatabase {
     } catch (error) {
       logger.error(`清除场景默认模式失败 (sceneId: ${sceneId}):`, error);
       throw new MCPError(`Failed to clear scene default modes: ${sceneId}`, 'SCENE_DEFAULT_MODES_CLEAR_ERROR', { sceneId, error });
+    }
+  }
+
+  /**
+   * 清除所有场景的默认状态
+   */
+  clearAllScenesDefault(): void {
+    try {
+      const now = Date.now();
+      const stmt = this.db.prepare('UPDATE scenes SET is_default = 0, updated_at = ? WHERE is_default = 1');
+      const result = stmt.run(now);
+      logger.debug(`已清除所有场景的默认状态，共更新 ${result.changes} 个场景`);
+    } catch (error) {
+      logger.error('清除所有场景默认状态失败:', error);
+      throw new MCPError('Failed to clear all scenes default status', 'SCENES_DEFAULT_CLEAR_ERROR', { error });
     }
   }
 

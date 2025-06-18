@@ -124,6 +124,15 @@ export const useScenesStore = defineStore('scenes', () => {
     
     try {
       const newScene = await promptService.createScene(sceneData)
+      
+      // 如果新场景设置为默认，需要同步本地状态
+      if (sceneData.isDefault === true) {
+        // 先清除所有场景的默认状态
+        scenes.value.forEach(scene => {
+          scene.isDefault = false
+        })
+      }
+      
       scenes.value.push(newScene)
       return newScene
     } catch (err) {
@@ -145,6 +154,14 @@ export const useScenesStore = defineStore('scenes', () => {
       const updatedScene = await promptService.updateScene(sceneId, sceneData)
       const index = scenes.value.findIndex(s => s.id === sceneId)
       if (index !== -1) {
+        // 如果更新了默认状态，需要同步本地状态
+        if (sceneData.isDefault !== undefined) {
+          // 先清除所有场景的默认状态
+          scenes.value.forEach(scene => {
+            scene.isDefault = false
+          })
+        }
+        // 更新目标场景
         scenes.value[index] = updatedScene
       }
       return updatedScene

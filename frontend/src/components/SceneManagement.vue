@@ -44,7 +44,7 @@
 
     <!-- 空状态 -->
     <div v-else-if="!loading && !hasScenes" class="empty-state">
-      <div class="empty-icon">🎭</div>
+      <SparklesIcon class="empty-icon" />
       <h3>暂无场景</h3>
       <p>创建您的第一个工作场景，开始个性化的AI协作体验</p>
       <button class="action-btn primary" @click="openCreateSceneDialog">
@@ -63,7 +63,7 @@
             active: managementSelectedScene?.id === scene.id,
             default: scene.isDefault 
           }"
-          @click="selectScene(scene)"
+          @click="selectSceneSelection(scene)"
         >
           <!-- 场景卡片头部 -->
           <div class="scene-card-header">
@@ -76,18 +76,25 @@
             </div>
             <div class="scene-actions">
               <button 
+                class="icon-btn detail" 
+                @click.stop="openSceneDetail(scene)"
+                title="查看详情"
+              >
+                <EyeIcon class="icon" />
+              </button>
+              <button 
                 class="icon-btn" 
                 @click.stop="editScene(scene)"
                 title="编辑场景"
               >
-                ✏️
+                <PencilIcon class="icon" />
               </button>
               <button 
                 class="icon-btn" 
                 @click.stop="duplicateScene(scene)"
                 title="复制场景"
               >
-                📋
+                <DocumentDuplicateIcon class="icon" />
               </button>
               <button 
                 v-if="!scene.isDefault"
@@ -95,7 +102,7 @@
                 @click.stop="deleteScene(scene)"
                 title="删除场景"
               >
-                🗑️
+                <TrashIcon class="icon" />
               </button>
             </div>
           </div>
@@ -121,7 +128,7 @@
                 @click.stop="addModeToScene(scene)"
                 title="添加新模式"
               >
-                ➕
+                <PlusIcon class="icon" />
               </button>
             </div>
             <div class="modes-list">
@@ -155,90 +162,93 @@
       </div>
     </div>
 
-    <!-- 场景详情侧边栏 -->
-    <div v-if="managementSelectedScene" class="scene-detail-sidebar" :class="{ open: showDetailSidebar }">
-      <div class="sidebar-header">
-        <h3>{{ managementSelectedScene.name }}</h3>
-        <button class="close-sidebar" @click="closeDetailSidebar">×</button>
-      </div>
-      
-      <div class="sidebar-content">
-        <!-- 场景基本信息 -->
-        <div class="detail-section">
-          <h4>基本信息</h4>
-          <div class="info-grid">
-            <div class="info-item">
-              <label>场景名称</label>
-              <span>{{ managementSelectedScene.name }}</span>
-            </div>
-            <div class="info-item">
-              <label>描述</label>
-              <span>{{ managementSelectedScene.description }}</span>
-            </div>
-            <div class="info-item">
-              <label>创建时间</label>
-              <span>{{ formatDateTime(managementSelectedScene.createdAt) }}</span>
-            </div>
-            <div class="info-item">
-              <label>更新时间</label>
-              <span>{{ formatDateTime(managementSelectedScene.updatedAt) }}</span>
-            </div>
-          </div>
+    <!-- 侧边栏遮罩层 -->
+    <div v-if="showDetailSidebar" class="sidebar-overlay" @click="handleSidebarClick">
+      <!-- 场景详情侧边栏 -->
+      <div v-if="managementSelectedScene" class="scene-detail-sidebar" :class="{ open: showDetailSidebar }">
+        <div class="sidebar-header">
+          <h3>{{ managementSelectedScene.name }}</h3>
+          <button class="close-sidebar" @click="closeDetailSidebar">×</button>
         </div>
-
-        <!-- 模式管理 -->
-        <div class="detail-section">
-          <div class="section-header">
-            <h4>模式管理</h4>
-            <button 
-              class="action-btn small primary" 
-              @click="addModeToScene(managementSelectedScene)"
-            >
-              添加模式
-            </button>
-          </div>
-          
-          <div v-if="getSceneModes(managementSelectedScene.id).length === 0" class="empty-modes">
-            <p>此场景暂无模式</p>
-          </div>
-          <div v-else class="modes-detail-list">
-            <div 
-              v-for="mode in getSceneModes(managementSelectedScene.id)" 
-              :key="mode.id"
-              class="mode-detail-item"
-            >
-              <div class="mode-info">
-                <div class="mode-header">
-                  <span class="mode-name">{{ mode.name }}</span>
-                  <div class="mode-badges">
-                    <span v-if="mode.isDefault" class="badge default">默认</span>
-                    <span v-if="mode.shortcut" class="badge shortcut">{{ mode.shortcut }}</span>
-                  </div>
-                </div>
-                <p class="mode-description">{{ mode.description }}</p>
+        
+        <div class="sidebar-content">
+          <!-- 场景基本信息 -->
+          <div class="detail-section">
+            <h4>基本信息</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <label>场景名称</label>
+                <span>{{ managementSelectedScene.name }}</span>
               </div>
-              <div class="mode-actions">
-                <button 
-                  class="icon-btn small" 
-                  @click="editMode(managementSelectedScene, mode)"
-                  title="编辑模式"
-                >
-                  ✏️
-                </button>
-                <button 
-                  class="icon-btn small" 
-                  @click="editModePrompt(managementSelectedScene, mode)"
-                  title="编辑提示词"
-                >
-                  📝
-                </button>
-                <button 
-                  class="icon-btn small delete" 
-                  @click="deleteMode(managementSelectedScene, mode)"
-                  title="删除模式"
-                >
-                  🗑️
-                </button>
+              <div class="info-item">
+                <label>描述</label>
+                <span>{{ managementSelectedScene.description }}</span>
+              </div>
+              <div class="info-item">
+                <label>创建时间</label>
+                <span>{{ formatDateTime(managementSelectedScene.createdAt) }}</span>
+              </div>
+              <div class="info-item">
+                <label>更新时间</label>
+                <span>{{ formatDateTime(managementSelectedScene.updatedAt) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模式管理 -->
+          <div class="detail-section">
+            <div class="section-header">
+              <h4>模式管理</h4>
+              <button 
+                class="action-btn small primary" 
+                @click="addModeToScene(managementSelectedScene)"
+              >
+                添加模式
+              </button>
+            </div>
+            
+            <div v-if="getSceneModes(managementSelectedScene.id).length === 0" class="empty-modes">
+              <p>此场景暂无模式</p>
+            </div>
+            <div v-else class="modes-detail-list">
+              <div 
+                v-for="mode in getSceneModes(managementSelectedScene.id)" 
+                :key="mode.id"
+                class="mode-detail-item"
+              >
+                <div class="mode-info">
+                  <div class="mode-header">
+                    <span class="mode-name">{{ mode.name }}</span>
+                    <div class="mode-badges">
+                      <span v-if="mode.isDefault" class="badge default">默认</span>
+                      <span v-if="mode.shortcut" class="badge shortcut">{{ mode.shortcut }}</span>
+                    </div>
+                  </div>
+                  <p class="mode-description">{{ mode.description }}</p>
+                </div>
+                <div class="mode-actions">
+                  <button 
+                    class="icon-btn small" 
+                    @click="editMode(managementSelectedScene, mode)"
+                    title="编辑模式"
+                  >
+                    <PencilIcon class="icon" />
+                  </button>
+                  <button 
+                    class="icon-btn small" 
+                    @click="editModePrompt(managementSelectedScene, mode)"
+                    title="编辑提示词"
+                  >
+                    <DocumentTextIcon class="icon" />
+                  </button>
+                  <button 
+                    class="icon-btn small delete" 
+                    @click="deleteMode(managementSelectedScene, mode)"
+                    title="删除模式"
+                  >
+                    <TrashIcon class="icon" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -430,12 +440,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, nextTick } from 'vue'
+import { computed, ref, onMounted, nextTick, inject } from 'vue'
 import { useScenesStore } from '../stores/scenes'
 import { useAppStore } from '../stores/app'
 import type { Scene, SceneMode, SceneRequest, SceneModeRequest, SceneConfigExport } from '../types/app'
 import { promptService } from '../services/promptService'
 import PromptEditor from './PromptEditor.vue'
+
+// 获取全局消息显示方法
+const showStatusMessage = inject<(type: 'success' | 'error' | 'warning' | 'info', message: string, autoRemove?: boolean) => void>('showStatusMessage')
+import { 
+  EyeIcon,
+  PencilIcon,
+  DocumentDuplicateIcon,
+  TrashIcon,
+  PlusIcon,
+  SparklesIcon,
+  DocumentTextIcon
+} from '../components/icons'
 
 // Store引用
 const scenesStore = useScenesStore()
@@ -500,13 +522,11 @@ const promptEditorRef = ref<InstanceType<typeof PromptEditor>>()
 
 // 方法
 
-const selectScene = async (scene: Scene) => {
-  // 如果点击的是当前选中的场景且侧边栏已打开，则关闭侧边栏
-  if (managementSelectedScene.value?.id === scene.id && showDetailSidebar.value) {
-    closeDetailSidebar()
-    return
-  }
-  
+const selectSceneSelection = (scene: Scene) => {
+  managementSelectedScene.value = scene
+}
+
+const openSceneDetail = async (scene: Scene) => {
   managementSelectedScene.value = scene
   showDetailSidebar.value = true
   
@@ -516,7 +536,7 @@ const selectScene = async (scene: Scene) => {
 
 const closeDetailSidebar = () => {
   showDetailSidebar.value = false
-  managementSelectedScene.value = null
+  // 注意：不清空 managementSelectedScene.value，保持场景的选中状态
 }
 
 // 加载场景模式数据
@@ -821,8 +841,7 @@ const editModePrompt = async (scene: Scene, mode: SceneMode) => {
     const saved = await promptEditorRef.value.show({
       scene,
       mode,
-      initialPrompt: currentPrompt,
-      initialDefaultFeedback: mode.defaultFeedback || ''
+      initialPrompt: currentPrompt
     })
     
     if (saved) {
@@ -839,6 +858,8 @@ const editModePrompt = async (scene: Scene, mode: SceneMode) => {
 const exportConfig = async () => {
   try {
     const config = await promptService.exportSceneConfig()
+    
+    // 创建下载文件
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -846,7 +867,14 @@ const exportConfig = async () => {
     a.download = `scene-config-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
+    
+    // 显示成功消息
+    const totalItems = config.scenes.length + config.modes.length + config.prompts.length
+    showStatusMessage?.('success', `场景配置导出成功！共导出 ${totalItems} 项数据`)
+    
+    console.log('[SceneManagement] 场景配置导出完成')
   } catch (error) {
+    console.error('[SceneManagement] 导出场景配置失败:', error)
     // 错误已通过全局错误处理器显示
   }
 }
@@ -870,16 +898,85 @@ const handleFileSelect = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   
+  // 验证文件类型
+  if (!file.name.endsWith('.json')) {
+    showStatusMessage?.('error', '请选择JSON格式的配置文件')
+    return
+  }
+  
+  // 验证文件大小（限制为5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    showStatusMessage?.('error', '配置文件过大，请选择小于5MB的文件')
+    return
+  }
+  
   const reader = new FileReader()
   reader.onload = (e) => {
     try {
-      const config = JSON.parse(e.target?.result as string)
-      importPreview.value = config
+      const rawConfig = JSON.parse(e.target?.result as string)
+      
+      // 验证配置文件的基本结构
+      const validationErrors: string[] = []
+      
+      if (!rawConfig || typeof rawConfig !== 'object') {
+        validationErrors.push('无效的JSON格式')
+      } else {
+        // 检查是否包含必要的字段
+        if (!Array.isArray(rawConfig.scenes)) {
+          validationErrors.push('缺少scenes数组')
+        }
+        if (!Array.isArray(rawConfig.modes)) {
+          validationErrors.push('缺少modes数组') 
+        }
+        if (!Array.isArray(rawConfig.prompts)) {
+          validationErrors.push('缺少prompts数组')
+        }
+        
+        // 验证数据完整性
+        if (rawConfig.scenes && rawConfig.scenes.length > 0) {
+          const invalidScenes = rawConfig.scenes.filter((scene: any) => 
+            !scene.id || !scene.name || typeof scene.name !== 'string'
+          )
+          if (invalidScenes.length > 0) {
+            validationErrors.push(`${invalidScenes.length}个场景数据不完整`)
+          }
+        }
+        
+        if (rawConfig.modes && rawConfig.modes.length > 0) {
+          const invalidModes = rawConfig.modes.filter((mode: any) => 
+            !mode.id || !mode.name || !mode.sceneId || typeof mode.name !== 'string'
+          )
+          if (invalidModes.length > 0) {
+            validationErrors.push(`${invalidModes.length}个模式数据不完整`)
+          }
+        }
+      }
+      
+      if (validationErrors.length > 0) {
+        showStatusMessage?.('error', `配置文件验证失败: ${validationErrors.join(', ')}`)
+        return
+      }
+      
+      // 设置预览数据
+      importPreview.value = {
+        version: rawConfig.version || '2.0',
+        exportedAt: rawConfig.exportedAt || Date.now(),
+        scenes: rawConfig.scenes || [],
+        modes: rawConfig.modes || [],
+        prompts: rawConfig.prompts || []
+      }
+      
+      console.log('[SceneManagement] 配置文件验证通过，预览数据已设置')
     } catch (error) {
-      // 错误已通过全局错误处理器显示
-      alert('配置文件格式错误')
+      console.error('[SceneManagement] 解析配置文件失败:', error)
+      showStatusMessage?.('error', '配置文件格式错误，请检查JSON语法')
     }
   }
+  
+  reader.onerror = () => {
+    showStatusMessage?.('error', '读取文件失败，请重试')
+  }
+  
   reader.readAsText(file)
 }
 
@@ -889,13 +986,26 @@ const importConfig = async () => {
   importing.value = true
   try {
     await promptService.importSceneConfig(importPreview.value)
+    
+    // 重新加载场景数据
     await scenesStore.loadScenes()
+    
     // 清空现有数据，重新按需加载
     sceneModeData.value.clear()
     await preloadVisibleSceneModes()
+    
+    // 显示成功消息
+    const totalItems = importPreview.value.scenes.length + importPreview.value.modes.length + importPreview.value.prompts.length
+    showStatusMessage?.('success', `场景配置导入成功！共导入 ${totalItems} 项数据`)
+    
     closeImportDialog()
+    
+    console.log('[SceneManagement] 场景配置导入完成，数据已刷新')
   } catch (error) {
-    // 错误已通过全局错误处理器显示
+    console.error('[SceneManagement] 导入场景配置失败:', error)
+    // 显示详细的错误信息
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    showStatusMessage?.('error', `导入失败: ${errorMessage}`)
   } finally {
     importing.value = false
   }
@@ -906,6 +1016,13 @@ const handleModalClick = (e: Event) => {
     if (showSceneDialog.value) closeSceneDialog()
     if (showModeDialog.value) closeModeDialog()
     if (showImportDialog.value) closeImportDialog()
+  }
+}
+
+const handleSidebarClick = (e: Event) => {
+  // 如果点击的是遮罩层本身（而不是侧边栏内容），则关闭侧边栏
+  if (e.target === e.currentTarget) {
+    closeDetailSidebar()
   }
 }
 
@@ -1084,8 +1201,10 @@ const preloadVisibleSceneModes = async () => {
 }
 
 .empty-icon {
-  font-size: 48px;
+  width: 48px;
+  height: 48px;
   margin-bottom: 16px;
+  color: #969696;
 }
 
 .empty-state h3 {
@@ -1116,7 +1235,6 @@ const preloadVisibleSceneModes = async () => {
   border: 1px solid #3e3e42;
   border-radius: 8px;
   padding: 16px;
-  cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
 }
@@ -1131,13 +1249,6 @@ const preloadVisibleSceneModes = async () => {
   background: #1e2a3a;
 }
 
-.scene-card.default::before {
-  content: '⭐';
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 14px;
-}
 
 .scene-card-header {
   display: flex;
@@ -1197,10 +1308,23 @@ const preloadVisibleSceneModes = async () => {
   border-radius: 4px;
   transition: all 0.2s ease;
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.icon-btn.detail:hover {
+  background: #007acc;
+  color: white;
 }
 
 .icon-btn.delete:hover {
@@ -1211,6 +1335,11 @@ const preloadVisibleSceneModes = async () => {
 .icon-btn.small {
   padding: 2px;
   font-size: 10px;
+}
+
+.icon-btn.small .icon {
+  width: 14px;
+  height: 14px;
 }
 
 .scene-stats {
@@ -1267,6 +1396,14 @@ const preloadVisibleSceneModes = async () => {
   border-radius: 3px;
   font-size: 10px;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-mode-btn .icon {
+  width: 12px;
+  height: 12px;
 }
 
 .add-mode-btn:hover {
@@ -1319,6 +1456,18 @@ const preloadVisibleSceneModes = async () => {
   border-top: 1px solid #3e3e42;
   color: #969696;
   font-size: 12px;
+}
+
+/* 侧边栏遮罩层 */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
+  transition: opacity 0.3s ease;
 }
 
 /* 侧边栏 */

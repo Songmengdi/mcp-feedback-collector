@@ -7,7 +7,6 @@ import type {
   SceneMode, 
   CurrentSelection,
   ScenesResponse,
-  SceneConfigExportResponse,
   SceneRequest,
   SceneModeRequest,
   SceneConfigExport 
@@ -26,6 +25,18 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+}
+
+// 导入API专用响应类型
+export interface ImportApiResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  result?: {
+    success: number;
+    failed: number;
+    errors: string[];
+  };
 }
 
 export class PromptService {
@@ -397,17 +408,40 @@ export class PromptService {
         await this.handleApiError(response);
       }
 
-      const result: SceneConfigExportResponse = await response.json();
+      const result = await response.json();
       
-      // 导出API直接返回导出数据，不是标准的API响应格式
-      return result.config || { 
-        version: '2.0',
-        exportedAt: Date.now(),
-        scenes: [], 
-        modes: [], 
-        prompts: [] 
-      };
+      // 检查是否是包装在config字段中的响应格式
+      if (result.config) {
+        // SceneConfigExportResponse格式
+        const config = result.config;
+        return {
+          version: config.version || '2.0',
+          exportedAt: config.exportedAt || Date.now(),
+          scenes: config.scenes || [],
+          modes: config.modes || [],
+          prompts: config.prompts || []
+        };
+      } else if (result.version && result.scenes) {
+        // 直接的SceneConfigExport格式
+        return {
+          version: result.version || '2.0',
+          exportedAt: result.exportedAt || Date.now(),
+          scenes: result.scenes || [],
+          modes: result.modes || [],
+          prompts: result.prompts || []
+        };
+      } else {
+        console.warn('[PromptService] 导出响应格式不匹配，返回空配置');
+        return { 
+          version: '2.0',
+          exportedAt: Date.now(),
+          scenes: [], 
+          modes: [], 
+          prompts: [] 
+        };
+      }
     } catch (error) {
+      console.error('[PromptService] 导出场景配置失败:', error);
       // 错误已在handleApiError中处理
       throw error;
     }
@@ -419,6 +453,16 @@ export class PromptService {
   async importSceneConfig(config: SceneConfigExport): Promise<void> {
     try {
       console.log('[PromptService] 导入场景配置');
+      
+      // 客户端验证
+      if (!config || typeof config !== 'object') {
+        throw new Error('导入数据无效：配置对象为空');
+      }
+      
+      if (!Array.isArray(config.scenes) || !Array.isArray(config.modes) || !Array.isArray(config.prompts)) {
+        throw new Error('导入数据格式错误：缺少必要的数据数组');
+      }
+      
       const response = await fetch(`${this.SCENES_API_BASE}/import`, {
         method: 'POST',
         headers: {
@@ -431,17 +475,42 @@ export class PromptService {
         await this.handleApiError(response);
       }
 
-      const result: ApiResponse = await response.json();
+      const result: ImportApiResponse = await response.json();
       
       if (!result.success) {
-        throw new Error(result.error || result.message || '导入场景配置失败');
+        // 提供更详细的错误信息
+        let errorMessage = '导入场景配置失败';
+        
+        if (result.result && result.result.errors && Array.isArray(result.result.errors)) {
+          errorMessage += `:\n${result.result.errors.join('\n')}`;
+        } else if (result.error) {
+          errorMessage += `: ${result.error}`;
+        } else if (result.message) {
+          errorMessage += `: ${result.message}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // 导入成功后清理所有缓存
       this.clearAllSceneCache();
       
-      console.log('[PromptService] 场景配置导入成功');
+      // 记录导入统计信息
+      if (result.result) {
+        console.log(`[PromptService] 场景配置导入完成: 成功 ${result.result.success} 个, 失败 ${result.result.failed} 个`);
+        if (result.result.errors && result.result.errors.length > 0) {
+          console.warn('[PromptService] 导入过程中的错误:', result.result.errors);
+          
+          // 如果有错误但导入成功了一些项目，给用户提示
+          if (result.result.success > 0) {
+            console.info(`[PromptService] 部分导入成功，建议检查导入结果`);
+          }
+        }
+      } else {
+        console.log('[PromptService] 场景配置导入成功');
+      }
     } catch (error) {
+      console.error('[PromptService] 导入场景配置失败:', error);
       // 错误已在handleApiError中处理
       throw error;
     }

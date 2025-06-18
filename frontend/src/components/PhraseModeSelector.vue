@@ -30,7 +30,7 @@
     </div>
     
     <div class="mode-hint">
-      <span class="hint-icon">💡</span>
+      <LightBulbIcon class="hint-icon" />
       <span class="hint-text">{{ currentHintText }}</span>
     </div>
 
@@ -76,6 +76,7 @@ import { useScenesStore } from '../stores/scenes'
 import type { PhraseModeType } from '../types/app'
 import promptService from '../services/promptService'
 import shortcutService from '../services/shortcutService'
+import { LightBulbIcon } from '../components/icons'
 
 // Store引用
 const appStore = useAppStore()
@@ -254,18 +255,20 @@ onMounted(async () => {
     }
   }
   
-  // 确保快捷键服务已初始化
-  shortcutService.init()
+  // 确保快捷键服务已初始化（只在这里初始化一次，避免与FeedbackForm重复）
+  // shortcutService.init() // 注释掉，由FeedbackForm统一初始化
   
   // 监听场景模式变化，更新快捷键绑定
   const updateShortcutBindings = () => {
-    if (scenesStore.hasModes) {
+    if (scenesStore.hasModes && scenesStore.currentSceneModes.length > 0) {
       shortcutService.updateBindings(scenesStore.currentSceneModes)
     }
   }
   
-  // 初始更新
-  updateShortcutBindings()
+  // 等待场景数据加载完成后再初始化快捷键绑定
+  if (scenesStore.hasModes && scenesStore.currentSceneModes.length > 0) {
+    updateShortcutBindings()
+  }
   
   // 监听模式变化
   scenesStore.$subscribe(() => {
@@ -420,7 +423,10 @@ watch(currentModeId, async () => {
 }
 
 .hint-icon {
+  width: 16px;
+  height: 16px;
   margin-top: 1px;
+  flex-shrink: 0;
 }
 
 .hint-text {

@@ -2,7 +2,7 @@
   <div class="scene-selector-card">
     <div class="scene-header">
       <div class="scene-title">
-        <span class="scene-icon">🎭</span>
+        <SparklesIcon class="scene-icon" />
         <span class="scene-label">工作场景</span>
       </div>
       <div class="scene-header-right">
@@ -11,8 +11,8 @@
           :class="{ connected: connectionStore.isConnected, disconnected: !connectionStore.isConnected }"
           :title="connectionStore.connectionStatus"
         >
-          <span v-if="connectionStore.isConnected">🟢</span>
-          <span v-else>🔴</span>
+          <div v-if="connectionStore.isConnected" class="status-dot connected"></div>
+          <div v-else class="status-dot disconnected"></div>
         </div>
         <button 
           type="button" 
@@ -21,8 +21,8 @@
           :disabled="isLoading"
           title="管理场景设置"
         >
-          <span v-if="isLoading">⏳</span>
-          <span v-else>⚙️</span>
+          <div v-if="isLoading" class="loading-spinner"></div>
+          <Cog6ToothIcon v-else class="btn-icon" />
           <span class="btn-text">管理场景</span>
         </button>
       </div>
@@ -86,6 +86,7 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useScenesStore } from '../stores/scenes'
 import { useConnectionStore } from '../stores/connection'
+import { SparklesIcon, Cog6ToothIcon } from '../components/icons'
 
 // Store引用
 const scenesStore = useScenesStore()
@@ -203,6 +204,20 @@ onUnmounted(() => {
   cursor: help;
 }
 
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.connected {
+  background-color: #22c55e;
+}
+
+.status-dot.disconnected {
+  background-color: #ef4444;
+}
+
 .scene-title {
   display: flex;
   align-items: center;
@@ -213,7 +228,9 @@ onUnmounted(() => {
 }
 
 .scene-icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #007acc;
 }
 
 .scene-label {
@@ -246,6 +263,25 @@ onUnmounted(() => {
 
 .btn-text {
   font-weight: 500;
+}
+
+.btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #3e3e42;
+  border-top: 2px solid #007acc;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .scene-selection {

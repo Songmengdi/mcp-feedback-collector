@@ -369,6 +369,168 @@ export class WebServer {
       }
     });
 
+    // 导出场景配置
+    this.app.get('/api/scenes/export', (req, res) => {
+      try {
+        const config = this.promptManager.exportSceneConfig();
+        
+        // 转换数据格式以匹配前端期望的SceneConfigExport格式
+        const exportData = {
+          version: '2.0',
+          exported_at: new Date().toISOString(),
+          config: {
+            version: '2.0',
+            exportedAt: Date.now(),
+            scenes: config.scenes.map(scene => ({
+              id: scene.id,
+              name: scene.name,
+              description: scene.description,
+              icon: scene.icon,
+              isDefault: scene.is_default,
+              sortOrder: scene.sort_order,
+              createdAt: scene.created_at,
+              updatedAt: scene.updated_at
+            })),
+            modes: config.sceneModes.map(mode => ({
+              id: mode.id,
+              sceneId: mode.scene_id,
+              name: mode.name,
+              description: mode.description,
+              shortcut: mode.shortcut,
+              isDefault: mode.is_default,
+              sortOrder: mode.sort_order,
+              defaultFeedback: mode.default_feedback,
+              createdAt: mode.created_at,
+              updatedAt: mode.updated_at
+            })),
+            prompts: config.scenePrompts.map(prompt => ({
+              sceneId: prompt.scene_id,
+              modeId: prompt.mode_id,
+              prompt: prompt.prompt
+            }))
+          }
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="scene-config-export-${Date.now()}.json"`);
+        res.json(exportData);
+      } catch (error) {
+        logger.error('导出场景配置失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to export scene config',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 导入场景配置
+    this.app.post('/api/scenes/import', (req, res) => {
+      try {
+        const { config } = req.body;
+
+        if (!config || typeof config !== 'object') {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data',
+            message: '导入数据格式无效：缺少config对象'
+          });
+          return;
+        }
+
+        // 验证导入数据的基本结构
+        const validationErrors: string[] = [];
+        
+        if (!Array.isArray(config.scenes)) {
+          validationErrors.push('缺少scenes数组');
+        }
+        
+        if (!Array.isArray(config.modes)) {
+          validationErrors.push('缺少modes数组');  
+        }
+        
+        if (!Array.isArray(config.prompts)) {
+          validationErrors.push('缺少prompts数组');
+        }
+
+        if (validationErrors.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data structure',
+            message: `导入数据结构无效: ${validationErrors.join(', ')}`
+          });
+          return;
+        }
+
+        // 转换前端格式到后端格式，并添加数据验证
+        const backendConfig = {
+          scenes: config.scenes.map((scene: any) => {
+            if (!scene.id || !scene.name) {
+              throw new Error(`场景数据不完整: ${JSON.stringify(scene)}`);
+            }
+            return {
+              id: scene.id,
+              name: scene.name,
+              description: scene.description || '',
+              icon: scene.icon,
+              is_default: false, // 设置为非默认,防止和现有冲突
+              sort_order: Number(scene.sortOrder) || 0,
+              created_at: Number(scene.createdAt) || Date.now(),
+              updated_at: Number(scene.updatedAt) || Date.now()
+            };
+          }),
+          sceneModes: config.modes.map((mode: any) => {
+            if (!mode.id || !mode.name || !mode.sceneId) {
+              throw new Error(`模式数据不完整: ${JSON.stringify(mode)}`);
+            }
+            return {
+              id: mode.id,
+              scene_id: mode.sceneId,
+              name: mode.name,
+              description: mode.description || '',
+              shortcut: mode.shortcut,
+              is_default: Boolean(mode.isDefault),
+              sort_order: Number(mode.sortOrder) || 0,
+              default_feedback: mode.defaultFeedback,
+              created_at: Number(mode.createdAt) || Date.now(),
+              updated_at: Number(mode.updatedAt) || Date.now()
+            };
+          }),
+          scenePrompts: config.prompts.map((prompt: any) => {
+            if (!prompt.sceneId || !prompt.modeId || typeof prompt.prompt !== 'string') {
+              throw new Error(`提示词数据不完整: ${JSON.stringify(prompt)}`);
+            }
+            return {
+              scene_id: prompt.sceneId,
+              mode_id: prompt.modeId,
+              prompt: prompt.prompt,
+              created_at: Date.now(),
+              updated_at: Date.now()
+            };
+          })
+        };
+
+        const result = this.promptManager.importSceneConfig(backendConfig);
+
+        res.json({
+          success: true,
+          message: `场景配置导入完成: 成功 ${result.success} 个, 失败 ${result.failed} 个`,
+          result: {
+            success: result.success,
+            failed: result.failed,
+            errors: result.errors
+          }
+        });
+      } catch (error) {
+        logger.error('导入场景配置失败:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to import scene config',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
     // 获取场景详情
     this.app.get('/api/scenes/:sceneId', (req, res) => {
       try {
@@ -458,27 +620,42 @@ export class WebServer {
     this.app.put('/api/scenes/:sceneId', (req, res) => {
       try {
         const { sceneId } = req.params;
-        const { name, description } = req.body;
+        const { name, description, isDefault, icon, sortOrder } = req.body;
 
-        if (!name || typeof name !== 'string') {
-          res.status(400).json({
-            success: false,
-            error: 'Invalid scene name',
-            message: '场景名称不能为空'
-          });
-          return;
+        // 构建场景更新请求对象
+        const sceneRequest: Partial<SceneRequest> = {};
+        
+        // 验证必要字段并添加到请求对象
+        if (name !== undefined) {
+          if (!name || typeof name !== 'string') {
+            res.status(400).json({
+              success: false,
+              error: 'Invalid scene name',
+              message: '场景名称不能为空'
+            });
+            return;
+          }
+          sceneRequest.name = name;
         }
-
-        if (!description || typeof description !== 'string') {
-          res.status(400).json({
-            success: false,
-            error: 'Invalid scene description',
-            message: '场景描述不能为空'
-          });
-          return;
+        
+        if (description !== undefined) {
+          if (!description || typeof description !== 'string') {
+            res.status(400).json({
+              success: false,
+              error: 'Invalid scene description',
+              message: '场景描述不能为空'
+            });
+            return;
+          }
+          sceneRequest.description = description;
         }
+        
+        // 添加可选字段
+        if (isDefault !== undefined) sceneRequest.isDefault = isDefault;
+        if (icon !== undefined) sceneRequest.icon = icon;
+        if (sortOrder !== undefined) sceneRequest.sortOrder = sortOrder;
 
-        const scene = this.promptManager.updateScene(sceneId, name, description);
+        const scene = this.promptManager.updateScene(sceneId, sceneRequest);
 
         if (!scene) {
           res.status(404).json({
@@ -800,10 +977,41 @@ export class WebServer {
       try {
         const config = this.promptManager.exportSceneConfig();
         
+        // 转换数据格式以匹配前端期望的SceneConfigExport格式
         const exportData = {
           version: '2.0',
           exported_at: new Date().toISOString(),
-          config
+          config: {
+            version: '2.0',
+            exportedAt: Date.now(),
+            scenes: config.scenes.map(scene => ({
+              id: scene.id,
+              name: scene.name,
+              description: scene.description,
+              icon: scene.icon,
+              isDefault: scene.is_default,
+              sortOrder: scene.sort_order,
+              createdAt: scene.created_at,
+              updatedAt: scene.updated_at
+            })),
+            modes: config.sceneModes.map(mode => ({
+              id: mode.id,
+              sceneId: mode.scene_id,
+              name: mode.name,
+              description: mode.description,
+              shortcut: mode.shortcut,
+              isDefault: mode.is_default,
+              sortOrder: mode.sort_order,
+              defaultFeedback: mode.default_feedback,
+              createdAt: mode.created_at,
+              updatedAt: mode.updated_at
+            })),
+            prompts: config.scenePrompts.map(prompt => ({
+              sceneId: prompt.scene_id,
+              modeId: prompt.mode_id,
+              prompt: prompt.prompt
+            }))
+          }
         };
 
         res.setHeader('Content-Type', 'application/json');
@@ -833,7 +1041,64 @@ export class WebServer {
           return;
         }
 
-        const result = this.promptManager.importSceneConfig(config);
+        // 验证导入数据的基本结构
+        const validationErrors: string[] = [];
+        
+        if (!Array.isArray(config.scenes)) {
+          validationErrors.push('缺少scenes数组');
+        }
+        
+        if (!Array.isArray(config.modes)) {
+          validationErrors.push('缺少modes数组');  
+        }
+        
+        if (!Array.isArray(config.prompts)) {
+          validationErrors.push('缺少prompts数组');
+        }
+
+        if (validationErrors.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid import data structure',
+            message: `导入数据结构无效: ${validationErrors.join(', ')}`
+          });
+          return;
+        }
+
+        // 转换前端格式到后端格式
+        const backendConfig = {
+          scenes: config.scenes.map((scene: any) => ({
+            id: scene.id,
+            name: scene.name,
+            description: scene.description,
+            icon: scene.icon,
+            is_default: scene.isDefault || false,
+            sort_order: scene.sortOrder || 0,
+            created_at: scene.createdAt || Date.now(),
+            updated_at: scene.updatedAt || Date.now()
+          })),
+          sceneModes: config.modes.map((mode: any) => ({
+            id: mode.id,
+            scene_id: mode.sceneId,
+            name: mode.name,
+            description: mode.description,
+            shortcut: mode.shortcut,
+            is_default: mode.isDefault || false,
+            sort_order: mode.sortOrder || 0,
+            default_feedback: mode.defaultFeedback,
+            created_at: mode.createdAt || Date.now(),
+            updated_at: mode.updatedAt || Date.now()
+          })),
+          scenePrompts: config.prompts.map((prompt: any) => ({
+            scene_id: prompt.sceneId,
+            mode_id: prompt.modeId,
+            prompt: prompt.prompt,
+            created_at: Date.now(),
+            updated_at: Date.now()
+          }))
+        };
+
+        const result = this.promptManager.importSceneConfig(backendConfig);
 
         res.json({
           success: true,

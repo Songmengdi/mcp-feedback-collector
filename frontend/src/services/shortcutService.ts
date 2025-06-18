@@ -99,17 +99,22 @@ class ShortcutService {
    */
   private switchToMode(mode: SceneMode) {
     const appStore = useAppStore()
+    const scenesStore = useScenesStore()
     
-    // 更新当前选择
-    appStore.setCurrentSelection({
+    // 新的选择状态
+    const newSelection = {
       sceneId: mode.sceneId,
       modeId: mode.id
-    })
+    }
+    
+    // 更新 appStore 状态
+    appStore.setCurrentSelection(newSelection)
     
     // 向后兼容：同步更新传统模式状态
     appStore.setCurrentPhraseMode(mode.id)
     
-    console.log(`快捷键切换到模式: ${mode.name} (${mode.shortcut})`)
+    // 始终更新 scenesStore 状态，确保状态同步
+    scenesStore.setCurrentSelection(newSelection)
   }
 
   /**
@@ -129,6 +134,7 @@ class ShortcutService {
       // 只有在反馈表单区域内才响应快捷键
       if (formElement && formElement.contains(activeElement)) {
         const binding = this.bindings.get(event.key)
+        
         if (binding) {
           event.preventDefault()
           binding.handler()

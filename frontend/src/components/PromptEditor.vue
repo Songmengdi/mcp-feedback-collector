@@ -44,31 +44,11 @@
           </div>
         </div>
 
-        <!-- 默认反馈内容编辑区 -->
-        <div class="editor-section">
-          <div class="editor-toolbar">
-            <div class="toolbar-left">
-              <span class="editor-label">默认反馈内容</span>
-              <span class="variable-hint">用户未输入反馈时的默认内容</span>
-            </div>
-          </div>
-          
-          <div class="editor-container">
-            <textarea
-              ref="feedbackTextarea"
-              v-model="defaultFeedbackContent"
-              class="feedback-textarea"
-              placeholder="请输入该模式的默认反馈内容..."
-              :disabled="loading"
-              @keydown="handleKeydown"
-            ></textarea>
-          </div>
-        </div>
+
         
         <div class="editor-status">
           <div class="status-left">
             <span class="char-count">提示词: {{ promptContent.length }} 字符</span>
-            <span class="char-count">默认反馈: {{ defaultFeedbackContent.length }} 字符</span>
           </div>
           <span v-if="lastSaved" class="last-saved">
             最后保存: {{ formatTime(lastSaved) }}
@@ -105,7 +85,6 @@ interface PromptEditorOptions {
   scene: Scene
   mode: SceneMode
   initialPrompt?: string
-  initialDefaultFeedback?: string
 }
 
 // Props
@@ -113,15 +92,12 @@ const visible = ref(false)
 const scene = ref<Scene | null>(null)
 const mode = ref<SceneMode | null>(null)
 const promptContent = ref('')
-const defaultFeedbackContent = ref('')
 const originalPromptContent = ref('')
-const originalDefaultFeedbackContent = ref('')
 const loading = ref(false)
 const lastSaved = ref<number | null>(null)
 
 // Refs
 const editorTextarea = ref<HTMLTextAreaElement>()
-const feedbackTextarea = ref<HTMLTextAreaElement>()
 
 // 内部状态
 let resolvePromise: ((saved: boolean) => void) | null = null
@@ -130,8 +106,7 @@ let resolvePromise: ((saved: boolean) => void) | null = null
 const sceneName = computed(() => scene.value?.name || '')
 const modeName = computed(() => mode.value?.name || '')
 const hasChanges = computed(() => 
-  promptContent.value !== originalPromptContent.value || 
-  defaultFeedbackContent.value !== originalDefaultFeedbackContent.value
+  promptContent.value !== originalPromptContent.value
 )
 
 // 方法
@@ -140,9 +115,7 @@ const show = (options: PromptEditorOptions): Promise<boolean> => {
   scene.value = options.scene
   mode.value = options.mode
   promptContent.value = options.initialPrompt || ''
-  defaultFeedbackContent.value = options.initialDefaultFeedback || ''
   originalPromptContent.value = options.initialPrompt || ''
-  originalDefaultFeedbackContent.value = options.initialDefaultFeedback || ''
   loading.value = false
   lastSaved.value = null
   
@@ -163,9 +136,7 @@ const hide = () => {
   scene.value = null
   mode.value = null
   promptContent.value = ''
-  defaultFeedbackContent.value = ''
   originalPromptContent.value = ''
-  originalDefaultFeedbackContent.value = ''
   loading.value = false
   lastSaved.value = null
   resolvePromise = null
@@ -177,68 +148,32 @@ const handleSave = async () => {
   loading.value = true
   try {
     // 触发保存提示词事件
-    if (promptContent.value !== originalPromptContent.value) {
-      const promptEvent = new CustomEvent('savePrompt', {
-        detail: {
-          sceneId: scene.value.id,
-          modeId: mode.value.id,
-          prompt: promptContent.value
-        }
-      })
-      window.dispatchEvent(promptEvent)
-    }
-    
-    // 触发保存默认反馈事件
-    if (defaultFeedbackContent.value !== originalDefaultFeedbackContent.value) {
-      const feedbackEvent = new CustomEvent('saveDefaultFeedback', {
-        detail: {
-          sceneId: scene.value.id,
-          modeId: mode.value.id,
-          defaultFeedback: defaultFeedbackContent.value
-        }
-      })
-      window.dispatchEvent(feedbackEvent)
-    }
+    const promptEvent = new CustomEvent('savePrompt', {
+      detail: {
+        sceneId: scene.value.id,
+        modeId: mode.value.id,
+        prompt: promptContent.value
+      }
+    })
+    window.dispatchEvent(promptEvent)
     
     // 等待保存完成的确认
     await new Promise((resolve) => {
-      let promptSaved = promptContent.value === originalPromptContent.value
-      let feedbackSaved = defaultFeedbackContent.value === originalDefaultFeedbackContent.value
-      
       const handlePromptSaveComplete = () => {
-        promptSaved = true
-        checkAllSaved()
-      }
-      
-      const handleFeedbackSaveComplete = () => {
-        feedbackSaved = true
-        checkAllSaved()
-      }
-      
-      const checkAllSaved = () => {
-        if (promptSaved && feedbackSaved) {
-          window.removeEventListener('promptSaveComplete', handlePromptSaveComplete)
-          window.removeEventListener('defaultFeedbackSaveComplete', handleFeedbackSaveComplete)
-          resolve(true)
-        }
+        window.removeEventListener('promptSaveComplete', handlePromptSaveComplete)
+        resolve(true)
       }
       
       window.addEventListener('promptSaveComplete', handlePromptSaveComplete)
-      window.addEventListener('defaultFeedbackSaveComplete', handleFeedbackSaveComplete)
       
       // 5秒超时
       setTimeout(() => {
         window.removeEventListener('promptSaveComplete', handlePromptSaveComplete)
-        window.removeEventListener('defaultFeedbackSaveComplete', handleFeedbackSaveComplete)
         resolve(false)
       }, 5000)
-      
-      // 如果没有变化，立即完成
-      checkAllSaved()
     })
     
     originalPromptContent.value = promptContent.value
-    originalDefaultFeedbackContent.value = defaultFeedbackContent.value
     lastSaved.value = Date.now()
     
     if (resolvePromise) {
@@ -337,10 +272,10 @@ defineExpose({
   background: #2d2d30;
   border: 1px solid #3e3e42;
   border-radius: 8px;
-  width: 90%;
-  max-width: 800px;
-  height: 80vh;
-  max-height: 600px;
+  width: 95%;
+  max-width: 1200px;
+  height: 85vh;
+  max-height: none;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -422,11 +357,6 @@ defineExpose({
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-bottom: 1px solid #3e3e42;
-}
-
-.editor-section:last-child {
-  border-bottom: none;
 }
 
 .editor-toolbar {
@@ -481,14 +411,13 @@ defineExpose({
 
 .editor-container {
   flex: 1;
-  padding: 20px;
+  padding: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.prompt-textarea,
-.feedback-textarea {
+.prompt-textarea {
   flex: 1;
   width: 100%;
   padding: 12px;
@@ -502,17 +431,15 @@ defineExpose({
   resize: none;
   outline: none;
   transition: border-color 0.2s ease;
-  min-height: 120px;
+  min-height: 300px;
 }
 
-.prompt-textarea:focus,
-.feedback-textarea:focus {
+.prompt-textarea:focus {
   border-color: #007acc;
   box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
 }
 
-.prompt-textarea:disabled,
-.feedback-textarea:disabled {
+.prompt-textarea:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -521,7 +448,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
+  padding: 12px 16px;
   background: #2d2d30;
   border-top: 1px solid #3e3e42;
   flex-shrink: 0;

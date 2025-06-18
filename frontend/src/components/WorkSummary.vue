@@ -23,14 +23,15 @@
       <!-- 默认状态：等待工作汇报 -->
       <div v-if="!hasWorkSummary" class="default-message">
         <div class="empty-state">
-          <span class="empty-icon">📋</span>
+          <ClipboardIcon class="empty-icon" />
           <br><br>
           等待AI工作汇报...
           <br><br>
           <small>当AI调用 collect_feedback() 时，工作汇报内容将显示在这里</small>
           <br><br>
           <button @click="handleRefresh" class="refresh-button">
-            🔄 手动刷新
+            <ArrowPathIcon class="btn-icon" />
+            手动刷新
           </button>
         </div>
       </div>
@@ -46,6 +47,7 @@ import { computed, ref, inject } from 'vue'
 import socketService from '../services/socket'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
+import { ClipboardIcon, ArrowPathIcon } from '../components/icons'
 
 // Store引用
 const feedbackStore = useFeedbackStore()
@@ -189,9 +191,11 @@ const handleRefresh = () => {
 }
 
 .empty-icon {
-  font-size: 24px;
+  width: 24px;
+  height: 24px;
   display: block;
-  margin-bottom: 16px;
+  margin: 0 auto 16px auto;
+  color: #969696;
 }
 
 .refresh-button {
@@ -205,6 +209,14 @@ const handleRefresh = () => {
   font-weight: 500;
   transition: background-color 0.2s ease;
   margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refresh-button .btn-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .refresh-button:hover {
