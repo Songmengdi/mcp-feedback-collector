@@ -1,6 +1,6 @@
 {
   "name": "smd-mcp-feedback-collector",
-  "version": "1.3.0-beta.3",
+  "version": "1.3.2-beta.0",
   "description": "基于Node.js的MCP反馈收集器 - 支持AI工作汇报和用户反馈收集",
   "main": "dist/index.js",
   "bin": {

@@ -29,7 +29,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "smd-mcp-feedback-collector@beta"
+        "smd-mcp-feedback-collector@1.3.2-beta.0"
       ],
     }
   }
