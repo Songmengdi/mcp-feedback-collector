@@ -1,4 +1,4 @@
-// Toolbar 相关类型定义
+// Standalone Toolbar Service - 类型定义
 
 // 重新导出 SRPC 相关类型
 export type {
@@ -16,38 +16,11 @@ export interface ToolbarSessionInfo {
   features: string[];
 }
 
-// AI Agent 请求类型
-export interface PromptRequest {
-  sessionId: string;
-  prompt: string;
-  model?: string;
-  files?: string[];
-  images?: string[];
-  mode?: 'agent' | 'chat' | 'completion';
-}
-
-// AI Agent 响应类型
-export interface PromptResponse {
-  sessionId: string;
-  result: {
-    success: boolean;
-    output?: string;
-    error?: string;
-    metadata?: {
-      model: string;
-      mode: string;
-      processedAt: string;
-      service: string;
-      version?: string;
-    };
-  };
-}
-
 // RPC 更新消息类型
 export interface RPCUpdateMessage {
   sessionId: string;
   updateText: string;
-  status: 'processing' | 'ai_processing' | 'completed' | 'error' | 'calling_agent';
+  status: 'processing' | 'completed' | 'error' | 'forwarding' | 'forwarded';
   result?: any;
 }
 
@@ -58,11 +31,6 @@ export interface ToolbarConfig {
   portRange?: {
     start: number;
     end: number;
-  };
-  aiAgent?: {
-    enabled: boolean;
-    defaultModel?: string;
-    timeout?: number;
   };
   logging?: {
     enabled: boolean;
@@ -94,4 +62,24 @@ export interface ToolbarEvent {
   sessionId?: string;
   methodName?: string;
   error?: string;
+}
+
+// WebSocket 客户端连接类型
+export interface WebSocketClient {
+  id: string;
+  ws: any;
+  connected: boolean;
+  lastActivity: Date;
+}
+
+// Prompt 广播数据类型
+export interface PromptBroadcastData {
+  prompt: string;
+  sessionId: string;
+  model?: string;
+  files?: any[];
+  images?: any[];
+  mode?: string;
+  metadata?: any;
+  timestamp: number;
 } 

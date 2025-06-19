@@ -13,7 +13,6 @@ import { CollectFeedbackParams, Config, FeedbackData, ImageData, MCPError, Trans
 import { ClientIdentifier } from '../utils/client-identifier.js';
 import { logger } from '../utils/logger.js';
 import { PromptManager } from '../utils/prompt-manager.js';
-import { ToolbarServer } from './toolbar-server.js';
 import { WebServer } from './web-server.js';
 
 /**
@@ -21,7 +20,6 @@ import { WebServer } from './web-server.js';
  */
 export class MCPServer {
   private webServer: WebServer;
-  private toolbarServer: ToolbarServer;
   private config: Config;
   private isRunning = false;
   private clientIdentifier: ClientIdentifier;
@@ -47,8 +45,6 @@ export class MCPServer {
       logger.debug('创建新的WebServer实例');
     }
 
-    // 创建Toolbar服务器实例
-    this.toolbarServer = new ToolbarServer();
   }
 
   /**
@@ -428,7 +424,6 @@ export class MCPServer {
       // 并行启动Web服务器和Toolbar服务器
       await Promise.all([
         this.webServer.start(),
-        this.toolbarServer.start()
       ]);
       
       // 根据配置选择传输模式（默认使用stdio）
@@ -514,7 +509,6 @@ export class MCPServer {
       // 启动Web服务器和Toolbar服务器
       await Promise.all([
         this.webServer.start(),
-        this.toolbarServer.start()
       ]);
       
       this.isRunning = true;
@@ -577,7 +571,6 @@ export class MCPServer {
       // 并行停止Web服务器和Toolbar服务器
       await Promise.all([
         this.webServer.stop(),
-        this.toolbarServer.stop()
       ]);
       
       // 关闭提示词管理器
@@ -618,8 +611,6 @@ export class MCPServer {
     const result: { 
       running: boolean; 
       webPort?: number;
-      toolbarPort?: number;
-      toolbarStatus?: any;
       clientId?: string;
     } = {
       running: this.isRunning
@@ -628,12 +619,6 @@ export class MCPServer {
     if (this.webServer.isRunning()) {
       result.webPort = this.webServer.getPort();
     }
-
-    if (this.toolbarServer.isRunning()) {
-      result.toolbarPort = this.toolbarServer.getPort();
-    }
-
-    result.toolbarStatus = this.toolbarServer.getToolbarStatus();
 
     const clientId = this.clientIdentifier.getClientId();
     if (clientId) {

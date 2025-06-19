@@ -1,56 +1,142 @@
-# 后端模块文档导航
+# 后端模块
 
-## 📋 后端模块组概述
+## 模块概述
 
-后端模块提供了 MCP 协议实现、Web 服务、Stagewise 工具栏集成和各种基础设施服务。
+后端模块是MCP Feedback Collector的核心架构，采用双服务器设计：主Web服务器处理核心业务逻辑，独立Toolbar服务器专门处理工具栏集成。这种解耦设计确保了系统的可扩展性和维护性。
 
-## 📋 本模块文档列表
+## 核心架构
 
-### 服务器模块组
-- **[服务器模块详细文档](./服务器/index.md)** - 核心服务器实现和协调管理
-
-### 工具模块组
-- **[工具模块详细文档](./工具/index.md)** - 基础工具和辅助服务
-
-## 🏗️ 后端架构概览
-
+### 双服务器架构
 ```mermaid
-graph TD
-    A[CLI入口] --> B[服务器协调器]
-    B --> C[MCP服务器]
-    B --> D[Web服务器]
-    B --> E[Stagewise工具栏服务器]
+graph TB
+    subgraph "主应用 (可变端口)"
+        A[MCP Server] --> B[Web Server]
+        B --> C[HTTP API]
+        B --> D[WebSocket服务]
+        B --> E[数据存储]
+    end
     
-    C --> F[MCP协议处理]
-    D --> G[Socket.IO通信]
-    D --> H[HTTP API]
-    E --> I[Stagewise集成]
+    subgraph "独立Toolbar服务 (固定端口5749)"
+        F[Toolbar Server] --> G[SRPC WebSocket]
+        F --> H[广播WebSocket]
+        F --> I[RPC Handler]
+    end
     
-    F --> J[工具注册]
-    G --> K[实时通信]
-    H --> L[文件上传]
-    I --> M[RPC桥接]
-    
-    N[工具模块] --> C
-    N --> D
-    N --> E
+    J[MCP客户端] --> A
+    K[Web浏览器] --> B
+    L[Stagewise工具栏] --> F
+    M[多个WebService实例] --> F
 ```
 
-## 🎯 重点模块推荐
+## 模块结构
 
-基于模块重要性和复杂度，建议优先了解：
+### 🖥️ 服务器层
+- **[服务器](服务器/index.md)** - 核心服务器组件
+  - 主Web服务器 (Express.js + Socket.IO)
+  - 独立Toolbar服务器 (WebSocket + SRPC)
+  - RPC处理器组件
 
-1. **MCP服务器模块** - 核心协议实现和工具注册
-2. **Web服务器模块** - Socket.IO集成和会话管理  
-3. **服务器协调器** - 多服务器实例管理
-4. **工具模块集合** - 基础设施和辅助功能
+### 🗄️ 数据层
+- **[数据层](数据层/index.md)** - 数据存储和管理
+  - SQLite数据库操作
+  - 数据模型定义
+  - 存储策略
+
+### 🔧 工具类
+- **[工具类](工具类/index.md)** - 通用工具和辅助类
+  - 日志系统
+  - 端口管理
+  - 文件处理工具
+
+## 技术特点
+
+### 主应用服务器
+- **MCP协议支持**: 完整的MCP服务器实现
+- **Web服务**: Express.js + Socket.IO
+- **数据存储**: SQLite + Better-SQLite3
+- **实时通信**: WebSocket双向通信
+- **文件处理**: 多媒体文件上传和处理
+
+### 独立Toolbar服务器
+- **SRPC通信**: 与Stagewise工具栏的标准通信协议
+- **Prompt广播**: 实时广播到所有WebService实例
+- **固定端口**: 5749端口解决服务发现问题
+- **多客户端**: 支持多个WebService同时连接
+
+## 服务通信
+
+### 内部通信
+- MCP Server ↔ Web Server: 数据共享和状态同步
+- Web Server ↔ 数据层: 数据持久化操作
+- 工具类: 为各层提供通用功能支持
+
+### 外部通信
+- **MCP协议**: 与MCP客户端的标准通信
+- **HTTP/WebSocket**: 与Web前端的通信
+- **SRPC**: 与Stagewise工具栏的通信
+- **广播机制**: 向多个WebService实例分发prompt
+
+## 部署策略
+
+### 开发环境
+```bash
+# 启动主应用
+npm run dev
+
+# 启动独立Toolbar服务
+cd toolbar && npm run dev
+```
+
+### 生产环境
+```bash
+# 主应用
+npm run build && npm start
+
+# 独立Toolbar服务
+cd toolbar && npm run build && npm start
+```
+
+### Docker部署
+```dockerfile
+# 支持多服务容器部署
+# 主应用和Toolbar服务可分别容器化
+```
+
+## 性能特性
+
+### 并发处理
+- **主应用**: 支持多MCP客户端并发连接
+- **Toolbar服务**: 支持多WebService实例同时接收广播
+- **会话隔离**: 每个客户端独立的数据和状态管理
+
+### 资源优化
+- **内存管理**: 智能的连接和数据清理
+- **端口策略**: 主应用动态分配，Toolbar固定端口
+- **负载均衡**: 支持多实例部署和负载分担
+
+## 监控和维护
+
+### 健康检查
+- 主应用: `/api/health`
+- Toolbar服务: `/health`
+- 状态监控: 连接数、资源使用、错误统计
+
+### 日志系统
+- 分层日志记录
+- 错误追踪和调试
+- 性能指标监控
 
 ## 🧭 导航链接
 
-- **📋 [返回主目录](../../README.md)** - 返回文档导航中心
-- **🔧 [返回模块层目录](../index.md)** - 返回模块层导航
-- **🎨 [前端模块文档](../前端模块/index.md)** - 查看前端模块分析
-- **🔄 [交互层文档](../../交互层/index.md)** - 查看模块交互分析
+### 📁 子模块
+- [服务器](服务器/index.md) - 核心服务器组件
+- [数据层](数据层/index.md) - 数据存储和管理  
+- [工具类](工具类/index.md) - 通用工具和辅助类
+
+### 📄 相关文档
+- [前端模块](../前端模块/index.md) - 前端组件系统
+- [根目录](../index.md) - 模块层总览
+- [项目根目录](../../index.md) - 项目文档首页
 
 ---
 

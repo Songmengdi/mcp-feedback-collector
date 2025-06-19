@@ -1,140 +1,130 @@
-# 后端服务器模块详细文档
+# 服务器模块
 
-## 📋 服务器模块概述
+## 模块概述
 
-后端服务器模块是整个系统的核心，负责 MCP 协议实现、Web 服务提供、实时通信和 Stagewise 工具栏集成。
+服务器模块包含MCP Feedback Collector的核心服务器组件，负责处理HTTP请求、WebSocket通信、数据存储和外部服务集成。
 
-## 🔧 核心服务器组件
+## 核心服务器
 
-### MCP 协议服务器 (mcp-server.ts)
-- **文件**: `src/server/mcp-server.ts` (18KB, 632行)
-- **功能**: MCP 协议的核心实现
-- **职责**:
-  - MCP 客户端连接管理
-  - 工具注册和调用处理
-  - HTTP/Stdio 传输支持
-  - 反馈收集工具实现
+### 1. 主Web服务器
+- **[web-server.md](web-server.md)** - Express.js主服务器
+  - HTTP API服务
+  - 静态文件服务
+  - 中间件配置
+  - 路由管理
 
-**核心类和方法**:
-```typescript
-class MCPServer {
-  start(): Promise<void>              // 启动服务器
-  collectFeedback(): Promise<string>  // 收集反馈工具
-  createMcpServerInstance()          // 创建MCP实例
-}
-```
+### 2. 独立Toolbar服务器
+- **[toolbar-server.md](toolbar-server.md)** - 独立Toolbar服务
+  - SRPC WebSocket通信
+  - Prompt广播机制
+  - 固定端口策略（5749）
+  - 多客户端管理
 
-### Web 服务器 (web-server.ts)
-- **文件**: `src/server/web-server.ts` (53KB, 1661行)
-- **功能**: Web服务器和Socket.IO实现
-- **职责**:
-  - HTTP 服务提供
-  - Socket.IO 实时通信
-  - 会话管理和客户端隔离
-  - 文件上传和图片处理
+## 处理器组件
 
-**核心功能模块**:
-```typescript
-class WebServer {
-  setupExpress()      // Express服务器配置
-  setupSocketIO()     // Socket.IO配置
-  handleFileUpload()  // 文件上传处理
-  manageSession()     // 会话管理
-}
-```
+### RPC处理器
+- **[rpc-handler.md](rpc-handler.md)** - Toolbar RPC处理器
+  - SRPC方法实现
+  - Prompt广播处理
+  - 会话信息管理
+  - 广播回调机制
 
-### Stagewise 工具栏服务器 (toolbar-server.ts)
-- **文件**: `src/server/toolbar-server.ts` (11KB, 384行)
-- **功能**: Stagewise工具栏集成服务
-- **职责**:
-  - RPC 桥接服务
-  - 提示词处理和转发
-  - 工具栏通信协议
+## 服务架构
 
-**集成架构**:
-```typescript
-class ToolbarServer {
-  setupRPCBridge()    // RPC桥接设置
-  handlePrompts()     // 提示词处理
-  manageToolbar()     // 工具栏管理
-}
-```
-
-### 服务器协调器 (server-coordinator.ts)
-- **文件**: `src/server/server-coordinator.ts` (8.4KB, 318行)
-- **功能**: 多服务器实例协调管理
-- **职责**:
-  - 服务器生命周期管理
-  - 资源分配和优化
-  - 客户端隔离策略
-
-### Stdio 服务器启动器 (stdio-server-launcher.ts)
-- **文件**: `src/server/stdio-server-launcher.ts` (7.9KB, 283行)
-- **功能**: Stdio模式专用启动器
-- **职责**:
-  - 多客户端环境处理
-  - 资源优化和性能监控
-
-### Web 服务器管理器 (web-server-manager.ts)
-- **文件**: `src/server/web-server-manager.ts`
-- **功能**: Web服务器实例管理
-- **职责**:
-  - 服务器实例创建和销毁
-  - 端口管理和冲突解决
-
-## 🔄 服务器交互架构
-
+### 双服务器架构
 ```mermaid
-graph TD
-    A[CLI入口] --> B[服务器协调器]
+graph TB
+    subgraph "主应用服务器"
+        A[Web Server] --> B[HTTP API]
+        A --> C[静态文件服务]
+        A --> D[WebSocket服务]
+    end
     
-    B --> C[MCP服务器]
-    B --> D[Web服务器]
-    B --> E[Stagewise工具栏服务器]
+    subgraph "独立Toolbar服务器 (端口5749)"
+        E[Toolbar Server] --> F[SRPC WebSocket]
+        E --> G[广播WebSocket]
+        E --> H[RPC Handler]
+    end
     
-    C --> F[MCP协议处理]
-    C --> G[工具注册]
-    C --> H[反馈收集]
-    
-    D --> I[Express HTTP]
-    D --> J[Socket.IO]
-    D --> K[会话管理]
-    D --> L[文件处理]
-    
-    E --> M[RPC桥接]
-    E --> N[提示词处理]
-    E --> O[Stagewise集成]
-    
-    F --> P[客户端通信]
-    I --> Q[Web界面]
-    J --> R[实时数据]
-    M --> S[工具栏UI]
+    subgraph "外部连接"
+        I[浏览器客户端] --> A
+        J[Stagewise工具栏] --> E
+        K[WebService实例] --> E
+    end
 ```
 
-## 📊 服务器性能特性
+### 通信流程
+1. **主服务器**: 处理Web界面和API请求
+2. **独立Toolbar服务器**: 专门处理工具栏通信和prompt广播
+3. **解耦设计**: 两个服务器完全独立，可单独部署和维护
 
-### 并发处理能力
-- 支持多客户端同时连接
-- 会话隔离和数据安全
-- 资源优化和内存管理
+## 技术特点
 
-### 通信协议支持
-- **HTTP**: RESTful API 和文件上传
-- **WebSocket**: 实时双向通信
-- **Stdio**: 标准输入输出模式
-- **RPC**: 远程过程调用
+### 主Web服务器
+- **技术栈**: Express.js + Socket.IO + SQLite
+- **功能**: Web界面、API服务、数据存储
+- **端口**: 可配置（默认3000）
 
-### 错误处理和恢复
-- 优雅的错误处理机制
-- 自动重连和故障恢复
-- 详细的日志记录和监控
+### 独立Toolbar服务器
+- **技术栈**: Node.js + WebSocket + SRPC
+- **功能**: 工具栏通信、prompt广播
+- **端口**: 固定5749端口
+
+## 部署模式
+
+### 开发环境
+```bash
+# 启动主服务器
+npm run dev
+
+# 启动独立Toolbar服务器
+cd toolbar
+npm run dev
+```
+
+### 生产环境
+```bash
+# 构建和启动主服务器
+npm run build
+npm start
+
+# 构建和启动独立Toolbar服务器
+cd toolbar
+npm run build
+npm start
+```
+
+## 服务发现
+
+### 主服务器发现
+- 通过配置文件或环境变量指定端口
+- 支持动态端口分配
+
+### Toolbar服务器发现
+- 固定使用5749端口
+- Stagewise工具栏通过 `/ping/stagewise` 端点发现
+- 解决多服务实例的发现问题
+
+## 监控和维护
+
+### 健康检查
+- 主服务器: `/api/health`
+- Toolbar服务器: `/health`
+
+### 状态监控
+- 连接数统计
+- 服务运行状态
+- 错误日志记录
 
 ## 🧭 导航链接
 
-- **📋 [返回后端模块导航](../index.md)** - 返回后端模块主目录
-- **🔧 [返回模块层目录](../../index.md)** - 返回模块层导航
-- **🛠️ [工具模块文档](../工具/index.md)** - 查看工具模块分析
-- **🎨 [前端模块文档](../../前端模块/index.md)** - 查看前端模块分析
+### 📁 返回上级
+- [后端模块](../index.md) - 后端模块总览
+
+### 📄 相关文档
+- [数据层](../数据层/index.md) - 数据存储和管理
+- [工具类](../工具类/index.md) - 通用工具和辅助类
+- [组件层](../../前端模块/组件层/index.md) - 前端组件系统
 
 ---
 

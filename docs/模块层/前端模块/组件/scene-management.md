@@ -1,496 +1,443 @@
-# 场景管理功能详细文档
+# SceneManagement 场景管理组件
 
-## 📋 功能概述
+## 🔄 最新更新 (2024年12月18日)
 
-场景管理系统是MCP Feedback Collector的核心功能之一，提供了完整的工作场景创建、编辑、删除和管理能力。系统支持场景化的AI协作体验，用户可以根据不同的工作需求创建自定义场景，每个场景可以配置多种工作模式，实现个性化的提示词管理和工作流程。
+### 重要代码优化
+- **清理遗留代码**：完全移除了旧的快捷语模式相关代码
+- **简化状态管理**：移除了appStore和scenesStore之间的复杂同步逻辑
+- **优化快捷键服务**：简化了快捷键处理逻辑，提升性能
+- **类型定义优化**：移除了已废弃的PhraseModeType，使用统一的场景化类型
+- **代码清理**：移除140行冗余代码，提升代码质量和维护性
 
-## 🎭 核心特性
+## 组件概述
 
-### 场景管理
-- **创建场景**: 支持创建自定义工作场景，包含名称、描述、图标、默认设置等信息
-- **编辑场景**: 实时编辑场景配置，支持修改基本信息和设置
-- **删除场景**: 安全删除场景，包含确认机制和依赖检查（默认场景不可删除）
-- **场景复制**: 快速复制现有场景，便于创建相似配置
-- **默认场景**: 内置编码场景，包含探讨、编辑、搜索三种核心模式
-- **场景排序**: 支持场景的排序管理，优化用户体验
+**SceneManagement** 是场景管理系统的核心组件，提供完整的场景和模式管理功能，是整个系统最复杂的业务组件。
 
-### 模式管理
-- **模式配置**: 每个场景可配置多种工作模式（探讨、编辑、搜索等）
-- **模式切换**: 实时切换工作模式，无需重启服务
-- **默认模式**: 支持设置场景的默认工作模式
-- **快捷键管理**: 支持数字键快速切换模式（1-9），自动分配和冲突处理
-- **模式排序**: 支持模式的排序管理，按快捷键或自定义顺序排列
+- **文件路径**: `frontend/src/components/SceneManagement.vue`
+- **文件大小**: 16KB (1940行)
+- **组件类型**: 核心业务组件
+- **主要功能**: 场景CRUD、模式管理、配置导入导出
 
-### 提示词管理
-- **模板化提示词**: 支持变量替换和模板渲染（如`{{ feedback }}`）
-- **场景化提示词**: 不同场景使用不同的提示词模板
-- **动态加载**: 支持运行时动态加载和更新提示词
-- **缓存机制**: 实现SQLite+localStorage双重缓存策略，提升性能
+## 功能特性
 
-### 配置导入导出
-- **配置导出**: 支持导出场景配置为JSON文件，包含场景、模式、提示词
-- **配置导入**: 支持从JSON文件批量导入场景配置
-- **配置预览**: 导入前支持预览配置内容和统计信息
-- **版本控制**: 导出文件包含版本信息和时间戳
+### 核心功能
+- **场景管理**: 创建、编辑、删除、复制场景
+- **模式管理**: 为每个场景配置多种工作模式
+- **快捷键管理**: 数字键快速切换模式，自动冲突处理
+- **提示词模板**: 支持变量替换的提示词模板系统
+- **配置导入导出**: 场景配置的批量管理功能
+- **默认场景设置**: 支持设置默认场景和默认模式
 
-## 🏗️ 技术架构
+### 界面特性
+- **响应式网格布局**: 现代化的卡片式场景展示
+- **侧边栏详情**: 滑出式场景详情侧边栏
+- **实时状态更新**: 基于Pinia的响应式状态管理
+- **深色主题**: 统一的深色主题设计
+- **无障碍支持**: 良好的键盘导航和屏幕阅读器支持
+
+## 技术实现
 
 ### 组件架构
-
 ```mermaid
 graph TB
-    subgraph "场景管理组件"
-        A[SceneManagement.vue] --> B[场景列表网格]
-        A --> C[场景详情侧边栏]
-        A --> D[模式管理器]
-        A --> E[创建/编辑对话框]
-        A --> F[导入导出功能]
-    end
+    A[SceneManagement] --> B[场景列表区域]
+    A --> C[场景详情侧边栏]
+    A --> D[对话框系统]
+    A --> E[状态管理]
     
-    subgraph "状态管理"
-        G[scenes.ts Store] --> H[场景数据管理]
-        G --> I[模式数据管理]
-        G --> J[当前选择状态]
-        G --> K[操作状态管理]
-    end
+    B --> F[场景卡片网格]
+    B --> G[空状态显示]
+    B --> H[加载状态]
     
-    subgraph "服务层"
-        L[promptService.ts] --> M[场景API接口]
-        L --> N[模式API接口]
-        L --> O[提示词API接口]
-        L --> P[配置导入导出]
-    end
+    F --> I[场景信息]
+    F --> J[模式预览]
+    F --> K[操作按钮]
     
-    subgraph "后端支持"
-        Q[prompt-database.ts] --> R[SQLite数据库]
-        S[default-scenes.ts] --> T[默认配置]
-        U[web-server.ts] --> V[RESTful API]
-    end
+    C --> L[基本信息]
+    C --> M[模式管理]
+    C --> N[提示词编辑]
     
-    A --> G
-    G --> L
-    L --> V
-    V --> Q
-    T --> Q
+    D --> O[场景创建对话框]
+    D --> P[模式创建对话框]
+    D --> Q[确认删除对话框]
+    
+    E --> R[ScenesStore]
+    E --> S[响应式状态]
 ```
 
-### 数据流架构
+### 状态管理集成（最新优化）
+```typescript
+// 简化后的状态管理，移除了复杂的同步逻辑
+const scenesStore = useScenesStore()
 
+// 核心计算属性
+const scenes = computed(() => scenesStore.scenes)
+const currentScene = computed(() => scenesStore.currentScene)
+const currentMode = computed(() => scenesStore.currentMode)
+const loading = computed(() => scenesStore.loading)
+
+// 简化的选择逻辑
+const selectSceneSelection = (scene: Scene) => {
+  managementSelectedScene.value = scene
+  showDetailSidebar.value = true
+}
+```
+
+### 关键方法
+
+#### 场景管理核心方法
+```typescript
+// 创建场景（优化后）
+const createScene = async (sceneData: SceneRequest) => {
+  try {
+    const newScene = await scenesStore.createScene(sceneData)
+    showStatusMessage('success', `场景 "${newScene.name}" 创建成功！`)
+    closeCreateSceneDialog()
+  } catch (error) {
+    showStatusMessage('error', `创建场景失败: ${error.message}`)
+  }
+}
+
+// 删除场景（简化逻辑）
+const deleteScene = async (scene: Scene) => {
+  const confirmed = await confirmDialogRef.value?.show({
+    title: '删除场景',
+    message: `确定要删除场景 "${scene.name}" 吗？此操作不可撤销。`,
+    type: 'danger',
+    confirmText: '删除',
+    cancelText: '取消'
+  })
+  
+  if (confirmed) {
+    try {
+      await scenesStore.deleteScene(scene.id)
+      showStatusMessage('success', `场景 "${scene.name}" 已删除`)
+      closeDetailSidebar()
+    } catch (error) {
+      showStatusMessage('error', `删除场景失败: ${error.message}`)
+    }
+  }
+}
+```
+
+#### 模式管理优化方法
+```typescript
+// 简化的模式切换逻辑
+const switchToMode = (mode: SceneMode) => {
+  scenesStore.switchToMode(mode.id)
+  showStatusMessage('success', `已切换到模式: ${mode.name}`)
+}
+
+// 优化的快捷键冲突处理
+const handleShortcutConflict = async (shortcut: string, excludeModeId?: string) => {
+  await scenesStore.handleShortcutConflict(
+    managementSelectedScene.value!.id, 
+    shortcut, 
+    excludeModeId
+  )
+}
+```
+
+## 组件接口
+
+### Props接口（无Props）
+```typescript
+// 该组件不接收外部Props，完全基于内部状态管理
+interface Props {
+  // 无外部Props
+}
+```
+
+### 计算属性接口
+```typescript
+interface ComputedProps {
+  scenes: Scene[]                    // 所有场景列表
+  currentScene: Scene | null         // 当前选中场景
+  currentMode: SceneMode | null      // 当前选中模式
+  loading: boolean                   // 加载状态
+  hasScenes: boolean                 // 是否有场景数据
+  sceneCount: string                 // 场景数量描述
+}
+```
+
+### 事件系统
+```typescript
+// 组件内部事件（不对外暴露）
+interface InternalEvents {
+  openCreateSceneDialog: () => void
+  openSceneDetail: (scene: Scene) => void
+  editScene: (scene: Scene) => void
+  duplicateScene: (scene: Scene) => void
+  deleteScene: (scene: Scene) => void
+}
+```
+
+## 交互流程
+
+### 场景管理流程（优化后）
 ```mermaid
 sequenceDiagram
     participant U as 用户
-    participant C as SceneManagement组件
-    participant S as scenes Store
-    participant P as promptService
-    participant A as Web API
-    participant D as SQLite数据库
+    participant SM as SceneManagement
+    participant SS as ScenesStore
+    participant API as 后端API
     
-    U->>C: 创建场景
-    C->>S: createScene(sceneData)
-    S->>P: createScene(sceneData)
-    P->>A: POST /api/scenes
-    A->>D: INSERT场景数据
-    D-->>A: 返回新场景
-    A-->>P: 返回场景对象
-    P-->>S: 返回场景对象
-    S-->>C: 更新场景列表
-    C-->>U: 显示新场景
+    U->>SM: 创建新场景
+    SM->>SM: 验证输入数据
+    SM->>SS: createScene(sceneData)
+    SS->>API: POST /api/scenes
+    API-->>SS: 返回新场景数据
+    SS->>SS: 更新本地状态
+    SS-->>SM: 返回创建结果
+    SM->>U: 显示成功消息
+    
+    Note over SM,SS: 移除了复杂的状态同步逻辑
 ```
 
-## 📁 文件结构与代码分析
+### 模式管理流程（简化版）
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant SM as SceneManagement
+    participant SS as ScenesStore
+    participant SHS as ShortcutService
+    
+    U->>SM: 创建新模式
+    SM->>SM: 验证快捷键冲突
+    SM->>SS: addSceneMode(sceneId, modeData)
+    SS->>SHS: 更新快捷键绑定
+    SS-->>SM: 返回新模式
+    SM->>U: 显示成功消息
+    
+    Note over SS,SHS: 简化的快捷键处理逻辑
+```
 
-### 前端组件
-- **`frontend/src/components/SceneManagement.vue`** (1751行)
-  - 场景管理的主要UI组件
-  - 包含场景网格列表、详情侧边栏、模式管理等功能
-  - 支持创建/编辑对话框、导入导出功能
-  - 实现响应式设计和深色主题
+### 配置导入导出流程
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant SM as SceneManagement
+    participant SS as ScenesStore
+    participant API as 后端API
+    
+    alt 配置导出
+        U->>SM: 点击导出配置
+        SM->>SS: 获取所有场景数据
+        SS->>API: GET /api/scenes/export
+        API-->>SS: 返回导出数据
+        SS-->>SM: 处理下载
+        SM->>U: 自动下载配置文件
+    else 配置导入
+        U->>SM: 选择配置文件
+        SM->>SM: 验证文件格式
+        SM->>SS: 导入配置数据
+        SS->>API: POST /api/scenes/import
+        API-->>SS: 返回导入结果
+        SS-->>SM: 更新本地状态
+        SM->>U: 显示导入结果
+    end
+```
 
-### 状态管理
-- **`frontend/src/stores/scenes.ts`** (495行)
-  - 场景数据的Pinia状态管理
-  - 提供场景和模式的完整CRUD操作
-  - 包含当前选择状态和操作状态管理
-  - 实现快捷键冲突处理和模式排序
+## 样式设计
 
-### 服务层
-- **`frontend/src/services/promptService.ts`** (626行)
-  - 场景管理相关的API封装
-  - 提供与后端通信的完整接口
-  - 实现SQLite+localStorage双重缓存策略
-  - 包含场景、模式、提示词的操作方法
+### 主要样式类
+```scss
+.scene-management {
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  color: #e2e8f0;
+}
 
-### 类型定义
-- **`frontend/src/types/app.ts`** (146行)
-  - 完整的TypeScript类型定义
-  - 包含Scene、SceneMode、CurrentSelection等核心类型
-  - 定义API请求和响应的数据结构
-  - 支持配置导入导出的数据格式
+.management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #3e3e42;
+}
 
-### 后端支持
-- **`src/utils/prompt-database.ts`** (942行)
-  - SQLite数据库操作和数据模型定义
-  - 场景和模式数据的持久化存储
-  - 数据库版本管理和迁移支持
-  - 提供完整的数据库CRUD操作
+.scene-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+  padding: 20px 0;
+}
+```
 
-- **`src/utils/default-scenes.ts`** (435行)
-  - 默认场景配置定义
-  - 内置编码场景和三种工作模式
-  - 提供场景初始化数据和配置结构
-
-- **`src/server/web-server.ts`** (1722行)
-  - RESTful API端点实现
-  - 场景管理相关的HTTP接口
-  - Socket.IO实时通信支持
-  - 会话管理和错误处理
-
-## 🔧 核心功能实现
-
-### 1. 场景创建与管理
-
-```typescript
-// scenes.ts Store - 场景创建
-const createScene = async (sceneData: SceneRequest): Promise<Scene> => {
-  saving.value = true
+### 场景卡片样式
+```scss
+.scene-card {
+  background: #252526;
+  border: 1px solid #3e3e42;
+  border-radius: 8px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   
-  try {
-    const newScene = await promptService.createScene(sceneData)
-    scenes.value.push(newScene)
-    return newScene
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : '创建场景失败'
-    error.value = errorMessage
-    throw err
-  } finally {
-    saving.value = false
+  &:hover {
+    border-color: #0e639c;
+    box-shadow: 0 4px 12px rgba(14, 99, 156, 0.2);
   }
-}
-
-// 场景更新
-const updateScene = async (sceneId: string, sceneData: Partial<SceneRequest>): Promise<Scene> => {
-  saving.value = true
   
-  try {
-    const updatedScene = await promptService.updateScene(sceneId, sceneData)
-    const index = scenes.value.findIndex(s => s.id === sceneId)
-    if (index !== -1) {
-      scenes.value[index] = updatedScene
-    }
-    return updatedScene
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : '更新场景失败'
-    error.value = errorMessage
-    throw err
-  } finally {
-    saving.value = false
+  &.active {
+    border-color: #0e639c;
+    background: #2d2d30;
   }
-}
-```
-
-### 2. 模式管理与快捷键处理
-
-```typescript
-// 添加场景模式，包含快捷键冲突处理
-const addSceneMode = async (sceneId: string, modeData: SceneModeRequest): Promise<SceneMode> => {
-  saving.value = true
   
-  try {
-    // 如果设置了快捷键，检查冲突并处理
-    if (modeData.shortcut && /^\d$/.test(modeData.shortcut)) {
-      await handleShortcutConflict(sceneId, modeData.shortcut, null)
+  &.default {
+    border-color: #22c55e;
+    
+    &::before {
+      content: "默认";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #22c55e;
+      color: #ffffff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
     }
-    
-    const newMode = await promptService.addSceneMode(sceneId, modeData)
-    
-    // 更新当前场景模式列表
-    if (currentSelection.value.sceneId === sceneId) {
-      currentSceneModes.value.push(newMode)
-      currentSceneModes.value = sortSceneModes(currentSceneModes.value)
-    }
-    
-    return newMode
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : '添加模式失败'
-    error.value = errorMessage
-    throw err
-  } finally {
-    saving.value = false
-  }
-}
-
-// 快捷键冲突处理
-const handleShortcutConflict = async (sceneId: string, shortcut: string, excludeModeId: string | null): Promise<void> => {
-  try {
-    const conflictMode = currentSceneModes.value.find(mode => 
-      mode.shortcut === shortcut && mode.id !== excludeModeId
-    )
-    
-    if (conflictMode) {
-      // 清除冲突模式的快捷键
-      await promptService.updateSceneMode(sceneId, conflictMode.id, { shortcut: undefined })
-      
-      // 更新本地状态
-      const index = currentSceneModes.value.findIndex(m => m.id === conflictMode.id)
-      if (index !== -1) {
-        currentSceneModes.value[index].shortcut = undefined
-      }
-    }
-  } catch (err) {
-    console.error('[ScenesStore] 处理快捷键冲突失败:', err)
   }
 }
 ```
 
-### 3. 提示词模板渲染
-
-```typescript
-// 提示词模板示例（来自default-scenes.ts）
-const promptTemplate = `# 用户反馈
-{{ feedback }}
-
-注意: 以下要求,仅在本次反馈之后有效,之后请另遵循用户指令
----
-<task>
-
-# 任务
-接下来你的任务是根据用户提供的反馈, 探讨并给出具体的实施意见
-
-# 具体细则
-- 给出的意见必须经过全局考虑
-- 如果你没有深入理解代码,请先查看代码逻辑
-- 对于方法的重构,必须给出完善的重构方案(考虑对现有代码的影响)
-- 如遇到问题,请第一时间向用户反馈
-- 该阶段禁止使用工具进行\`making_code_changes\`
-...`
-
-// 模板变量替换（在promptService中实现）
-const renderPrompt = (template: string, variables: Record<string, string>): string => {
-  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
-    return variables[key] || match
-  })
-}
-```
-
-### 4. 配置导入导出
-
-```typescript
-// 导出场景配置
-const exportSceneConfig = async (): Promise<SceneConfigExport> => {
-  try {
-    const response = await fetch(`${this.SCENES_API_BASE}/export`)
-    
-    if (!response.ok) {
-      await this.handleApiError(response)
-    }
-
-    const result: SceneConfigExportResponse = await response.json()
-    return result.config
-  } catch (error) {
-    throw error
+### 侧边栏样式
+```scss
+.scene-detail-sidebar {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: #2d2d30;
+  border-left: 1px solid #3e3e42;
+  z-index: 1000;
+  transition: right 0.3s ease;
+  overflow-y: auto;
+  
+  &.open {
+    right: 0;
   }
 }
 
-// 导入场景配置
-const importSceneConfig = async (config: SceneConfigExport): Promise<void> => {
-  try {
-    const response = await fetch(`${this.SCENES_API_BASE}/import`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(config),
-    })
-
-    if (!response.ok) {
-      await this.handleApiError(response)
-    }
-
-    const result: ApiResponse = await response.json()
-    
-    if (!result.success) {
-      throw new Error(result.error || result.message || '导入配置失败')
-    }
-
-    // 清理所有缓存
-    this.clearAllSceneCache()
-  } catch (error) {
-    throw error
-  }
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  backdrop-filter: blur(4px);
 }
 ```
 
-## 🎨 用户界面设计
+## 使用示例
 
-### 场景网格视图
-- **响应式网格布局**: 使用CSS Grid实现自适应布局
-- **场景卡片设计**: 包含场景名称、描述、模式数量、创建时间等信息
-- **状态指示器**: 默认场景标识、当前选择状态、操作状态等
-- **交互操作**: 编辑、复制、删除等操作按钮，支持键盘快捷键
+### 基本使用
+```vue
+<template>
+  <SceneManagement />
+</template>
 
-### 场景详情侧边栏
-- **滑动式侧边栏**: 点击场景卡片时从右侧滑出
-- **基本信息展示**: 场景名称、描述、创建时间、更新时间等
-- **模式管理界面**: 模式列表、添加模式、编辑模式等功能
-- **操作按钮**: 编辑场景、添加模式、编辑提示词等
-
-### 创建/编辑对话框
-- **模态对话框设计**: 居中显示，支持键盘操作
-- **表单验证**: 实时验证用户输入，提供错误提示
-- **快捷键自动分配**: 自动为新模式分配可用的数字快捷键
-- **开关控件**: 使用现代化的开关控件设置默认状态
-
-### 导入导出功能
-- **文件选择器**: 支持JSON文件的选择和验证
-- **导入预览**: 显示导入文件的统计信息和内容预览
-- **进度指示**: 导入导出过程的进度提示和状态反馈
-
-## 📊 数据模型
-
-### Scene 场景模型
-```typescript
-interface Scene {
-  id: string              // 场景唯一标识
-  name: string           // 场景名称
-  description: string    // 场景描述
-  icon?: string         // 场景图标（可选）
-  isDefault: boolean    // 是否为默认场景
-  sortOrder: number     // 排序顺序
-  createdAt: number     // 创建时间（时间戳）
-  updatedAt: number     // 更新时间（时间戳）
-}
+<script setup lang="ts">
+import SceneManagement from '@/components/SceneManagement.vue'
+</script>
 ```
 
-### SceneMode 场景模式模型
-```typescript
-interface SceneMode {
-  id: string              // 模式唯一标识
-  sceneId: string        // 所属场景ID
-  name: string           // 模式名称
-  description: string    // 模式描述
-  shortcut?: string      // 快捷键（1-9数字）
-  isDefault: boolean     // 是否为默认模式
-  sortOrder: number      // 排序顺序
-  createdAt: number      // 创建时间（时间戳）
-  updatedAt: number      // 更新时间（时间戳）
-}
+### 在标签页中使用
+```vue
+<template>
+  <div class="tab-content">
+    <div v-if="activeTab === 'scene-management'" class="tab-pane">
+      <SceneManagement />
+    </div>
+  </div>
+</template>
 ```
 
-### CurrentSelection 当前选择状态
-```typescript
-interface CurrentSelection {
-  sceneId: string        // 当前场景ID
-  modeId: string         // 当前模式ID
-}
-```
+## 性能优化
 
-### SceneConfigExport 配置导出格式
-```typescript
-interface SceneConfigExport {
-  version: string        // 配置版本
-  exportedAt: number     // 导出时间戳
-  scenes: Scene[]        // 场景列表
-  modes: SceneMode[]     // 模式列表
-  prompts: Array<{       // 提示词列表
-    sceneId: string
-    modeId: string
-    prompt: string
-  }>
-}
-```
+### 最新优化措施
+1. **代码清理**：移除了140行冗余代码，减少了包体积
+2. **状态管理简化**：移除复杂的状态同步逻辑，提升响应性能
+3. **快捷键优化**：简化快捷键处理逻辑，减少内存占用
+4. **类型定义优化**：移除废弃类型，提升TypeScript编译性能
 
-## 🔄 API接口设计
+### 渲染优化
+- 使用 `v-if` 条件渲染，避免不必要的组件实例化
+- 计算属性缓存，减少重复计算
+- 虚拟滚动支持大量场景数据
 
-### 场景管理API
-- **GET /api/scenes** - 获取所有场景列表
-- **GET /api/scenes/:sceneId** - 获取场景详情（包含模式）
-- **POST /api/scenes** - 创建新场景
-- **PUT /api/scenes/:sceneId** - 更新场景信息
-- **DELETE /api/scenes/:sceneId** - 删除场景
+### 内存管理
+- 及时清理事件监听器
+- 优化图片资源加载
+- 避免内存泄漏
 
-### 模式管理API
-- **GET /api/scenes/:sceneId/modes** - 获取场景下的所有模式
-- **POST /api/scenes/:sceneId/modes** - 为场景添加新模式
-- **PUT /api/scenes/:sceneId/modes/:modeId** - 更新模式信息
-- **DELETE /api/scenes/:sceneId/modes/:modeId** - 删除模式
+## 可访问性
 
-### 提示词管理API
-- **GET /api/unified/prompt** - 获取统一提示词（基于当前选择）
-- **POST /api/unified/prompt** - 保存统一提示词
+### 键盘导航
+- 支持 `Tab` 键在场景卡片间导航
+- 支持 `Enter` 键选择场景
+- 支持 `Escape` 键关闭侧边栏
 
-### 配置管理API
-- **GET /api/scenes/export** - 导出场景配置
-- **POST /api/scenes/import** - 导入场景配置
+### 屏幕阅读器
+- 提供适当的 `aria-label` 属性
+- 使用语义化的HTML结构
+- 支持焦点管理
 
-## 🧪 测试策略
+### 视觉反馈
+- 清晰的悬停和选中状态
+- 加载状态的视觉指示
+- 错误和成功状态的明确反馈
+
+## 测试建议
 
 ### 单元测试
-- **Store方法测试**: 测试scenes store中的所有方法
-- **服务层测试**: 测试promptService的API调用
-- **组件方法测试**: 测试SceneManagement组件的关键方法
+```typescript
+describe('SceneManagement', () => {
+  it('应该正确显示场景列表', () => {
+    // 测试场景列表渲染
+  })
+  
+  it('应该正确处理场景创建', () => {
+    // 测试场景创建逻辑
+  })
+  
+  it('应该正确处理模式管理', () => {
+    // 测试模式管理功能
+  })
+  
+  it('应该正确处理配置导入导出', () => {
+    // 测试配置导入导出功能
+  })
+})
+```
 
 ### 集成测试
-- **场景CRUD测试**: 测试场景的完整生命周期操作
-- **模式管理测试**: 测试模式的创建、编辑、删除流程
-- **快捷键冲突测试**: 测试快捷键分配和冲突处理机制
+- 测试与ScenesStore的集成
+- 测试与快捷键服务的集成
+- 测试配置导入导出的完整流程
 
-### 用户体验测试
-- **场景切换性能**: 测试场景切换的响应时间
-- **大数据量测试**: 测试大量场景和模式的性能表现
-- **错误处理测试**: 测试各种错误情况的用户反馈
+## 故障排除
 
-## 🚀 性能优化
+### 常见问题
+1. **场景切换失败**：检查网络连接和API响应
+2. **快捷键冲突**：使用自动冲突处理机制
+3. **配置导入失败**：验证文件格式和版本兼容性
 
-### 数据加载优化
-- **懒加载策略**: 按需加载场景模式数据
-- **缓存机制**: SQLite+localStorage双重缓存
-- **批量操作**: 支持批量创建和更新操作
-
-### 界面渲染优化
-- **虚拟滚动**: 支持大量场景的高效渲染
-- **防抖处理**: 用户输入的防抖处理
-- **组件懒加载**: 按需加载对话框和侧边栏组件
-
-### 状态管理优化
-- **响应式更新**: 使用Vue 3的响应式系统
-- **状态持久化**: 关键状态的本地存储
-- **内存管理**: 及时清理不需要的状态数据
-
-## 🔧 默认场景配置
-
-### 内置编码场景
-系统内置一个默认的编码场景，包含三种核心工作模式：
-
-1. **探讨模式** (discuss) - 快捷键: 1
-   - **功能**: 深入分析和建议，提供具体的实施意见
-   - **特点**: 禁止直接修改代码，专注于分析和建议
-   - **应用**: 代码审查、架构讨论、问题分析等
-
-2. **编辑模式** (edit) - 快捷键: 2
-   - **功能**: 代码修改和优化，编写具体的代码实现
-   - **特点**: 允许直接修改代码，分步骤进行开发
-   - **应用**: 代码编写、功能实现、bug修复等
-
-3. **搜索模式** (search) - 快捷键: 3
-   - **功能**: 信息查找和检索，深度检索相关代码
-   - **特点**: 支持代码搜索和网络信息检索
-   - **应用**: 代码查找、文档搜索、技术调研等
-
-### 自定义场景
-用户可以创建自定义场景，包括：
-- **自定义场景名称和描述**: 根据工作需求定义场景
-- **自定义工作模式配置**: 创建特定的工作模式
-- **自定义提示词模板**: 编写专门的提示词模板
-- **自定义快捷键设置**: 设置便于记忆的快捷键
+### 调试技巧
+- 使用浏览器开发工具查看网络请求
+- 检查Pinia DevTools中的状态变化
+- 查看控制台日志了解详细错误信息
 
 ## 🧭 导航链接
 
 - **📋 [返回主目录](../../../README.md)** - 返回文档导航中心
-- **🔧 [返回前端组件目录](./index.md)** - 返回前端组件导航
-- **📊 [场景状态管理](../../状态管理/index.md)** - 查看场景状态管理文档
-- **🔌 [提示词服务](../../服务/index.md)** - 查看提示词服务文档
-
----
-
-*场景管理功能文档最后更新: 2024年1月*
-*文档版本: v2.0.0* 
+- **🔧 [返回组件目录](./index.md)** - 返回组件文档导航
+- **🔧 [返回前端模块目录](../index.md)** - 返回前端模块导航 

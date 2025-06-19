@@ -1,0 +1,39 @@
+{
+  "name": "standalone-toolbar-service",
+  "version": "1.0.0",
+  "description": "独立的Stagewise工具栏服务 - 支持SRPC通信和WebSocket广播",
+  "main": "dist/main.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "clean": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')){fs.rmSync('dist', {recursive: true, force: true})}\""
+  },
+  "keywords": [
+    "stagewise",
+    "toolbar",
+    "srpc",
+    "websocket",
+    "mcp"
+  ],
+  "author": "SMD",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "ws": "^8.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.14",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.8.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^3.14.0",
+    "typescript": "^5.2.2"
+  }
+} 
