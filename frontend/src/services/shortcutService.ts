@@ -4,7 +4,6 @@
  */
 
 import type { SceneMode } from '../types/app'
-import { useAppStore } from '../stores/app'
 import { useScenesStore } from '../stores/scenes'
 
 export interface ShortcutBinding {
@@ -75,7 +74,6 @@ class ShortcutService {
    * 获取当前模式的默认反馈内容
    */
   getCurrentModeDefaultFeedback(): string {
-    const appStore = useAppStore()
     const scenesStore = useScenesStore()
     
     const currentMode = scenesStore.getCurrentMode()
@@ -83,14 +81,7 @@ class ShortcutService {
       return this.getDefaultFeedback(currentMode)
     }
     
-    // 回退到传统的硬编码默认反馈
-    const defaultFeedbacks = {
-      discuss: '对之前的所有过程,做一个整体的总结性的归纳,并且明确最近一段时间我们的核心聚焦点是什么,思考接下来我们需要做什么',
-      edit: '根据之前步骤及需求,完成编码',
-      search: '深入研究相关代码'
-    }
-    
-    return defaultFeedbacks[appStore.currentPhraseMode as keyof typeof defaultFeedbacks] || ''
+    return ''
   }
 
   /**
@@ -98,7 +89,6 @@ class ShortcutService {
    * @param mode 目标模式
    */
   private switchToMode(mode: SceneMode) {
-    const appStore = useAppStore()
     const scenesStore = useScenesStore()
     
     // 新的选择状态
@@ -107,13 +97,7 @@ class ShortcutService {
       modeId: mode.id
     }
     
-    // 更新 appStore 状态
-    appStore.setCurrentSelection(newSelection)
-    
-    // 向后兼容：同步更新传统模式状态
-    appStore.setCurrentPhraseMode(mode.id)
-    
-    // 始终更新 scenesStore 状态，确保状态同步
+    // 更新 scenesStore 状态
     scenesStore.setCurrentSelection(newSelection)
   }
 

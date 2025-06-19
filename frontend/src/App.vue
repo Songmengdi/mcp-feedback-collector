@@ -63,36 +63,7 @@ const confirmDialogRef = ref<InstanceType<typeof ConfirmDialog>>()
 // 反馈成功倒计时相关状态
 const feedbackSuccessMessageId = ref<string | null>(null)
 
-// 加载默认提示词
-const loadDefaultPhrases = async () => {
-  try {
-    const modes = ['discuss', 'edit', 'search']
-    const phrases: Record<string, string> = {}
-    
-    for (const mode of modes) {
-      const response = await fetch(`/prompts/${mode}.txt`)
-      if (response.ok) {
-        phrases[mode] = await response.text()
-      } else {
-        console.warn(`无法加载 ${mode} 模式的默认提示词`)
-        // 如果文件加载失败，使用备用的默认内容
-        phrases[mode] = `\n\n---\n请基于以上工作内容提供${mode === 'discuss' ? '深入探讨和分析' : mode === 'edit' ? '具体修改建议' : '相关信息查找'}。`
-      }
-    }
-    
-    appStore.setDefaultPhrases(phrases)
-    console.log('默认提示词加载完成:', phrases)
-  } catch (error) {
-    console.error('加载默认提示词失败:', error)
-    // 使用备用的默认内容
-    const fallbackPhrases = {
-      discuss: '\n\n---\n请基于以上工作内容进行深入探讨和分析，提供建设性的意见和建议。',
-      edit: '\n\n---\n请基于以上工作内容提供具体的修改建议，包括代码优化、功能改进等方面的指导。',
-      search: '\n\n---\n请基于以上工作内容帮助我查找相关信息、解决方案或最佳实践。'
-    }
-    appStore.setDefaultPhrases(fallbackPhrases)
-  }
-}
+// 默认提示词加载逻辑已移除，现在使用场景化模式管理
 
 
 
@@ -142,9 +113,6 @@ provide('showStatusMessage', showStatusMessage)
 onMounted(async () => {
   console.log('Vue应用初始化开始')
   
-  // 加载默认提示词
-  await loadDefaultPhrases()
-  
   // 初始化场景数据
   try {
     await scenesStore.loadScenes()
@@ -152,9 +120,6 @@ onMounted(async () => {
   } catch (error) {
     console.error('场景数据加载失败:', error)
   }
-  
-  // 初始化快捷语模式
-  appStore.setCurrentPhraseMode('discuss')
   
   // 设置确认对话框引用到store
   if (confirmDialogRef.value) {

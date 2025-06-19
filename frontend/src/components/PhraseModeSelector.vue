@@ -71,15 +71,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { useAppStore } from '../stores/app'
 import { useScenesStore } from '../stores/scenes'
-import type { PhraseModeType } from '../types/app'
+// PhraseModeType已移除，现在完全使用场景化模式
 import promptService from '../services/promptService'
 import shortcutService from '../services/shortcutService'
 import { LightBulbIcon } from '../components/icons'
 
 // Store引用
-const appStore = useAppStore()
 const scenesStore = useScenesStore()
 
 // 本地状态
@@ -90,27 +88,14 @@ const isLoading = ref(false)
 
 // 计算属性 - 模式相关
 const availableModes = computed(() => {
-  if (scenesStore.hasModes) {
-    return scenesStore.currentSceneModes
-  }
-  // 向后兼容：如果没有场景模式，使用传统模式
-  return [
-    { id: 'discuss', name: '探讨', description: '探讨模式：自动附加深入分析和建议的提示词', shortcut: '1' },
-    { id: 'edit', name: '编辑', description: '编辑模式：自动附加代码修改和优化的提示词', shortcut: '2' },
-    { id: 'search', name: '搜索', description: '搜索模式：自动附加信息查找和解决方案的提示词', shortcut: '3' }
-  ]
+  return scenesStore.currentSceneModes
 })
 
 const currentSelection = computed(() => scenesStore.currentSelection)
 
 // 计算属性 - 模式相关
 const currentModeId = computed(() => {
-  // 优先使用场景化选择
-  if (scenesStore.hasScenes) {
-    return currentSelection.value.modeId
-  }
-  // 向后兼容传统模式
-  return appStore.currentPhraseMode
+  return currentSelection.value.modeId
 })
 
 const currentMode = computed(() => {
@@ -126,16 +111,7 @@ const currentModalTitle = computed(() => {
 })
 
 const currentHintText = computed(() => {
-  if (currentMode.value?.description) {
-    return currentMode.value.description
-  }
-  // 向后兼容的默认提示
-  const hints = {
-    discuss: '探讨模式：自动附加深入分析和建议的提示词',
-    edit: '编辑模式：自动附加代码修改和优化的提示词', 
-    search: '搜索模式：自动附加信息查找和解决方案的提示词'
-  }
-  return hints[currentModeId.value as PhraseModeType] || '当前模式的描述信息'
+  return currentMode.value?.description || '当前模式的描述信息'
 })
 
 const shortcutPrefix = computed(() => {
@@ -145,13 +121,7 @@ const shortcutPrefix = computed(() => {
 
 // 方法 - 模式选择
 const selectMode = async (modeId: string) => {
-  if (scenesStore.hasScenes) {
-    // 场景化模式切换
-    scenesStore.switchToMode(modeId)
-  } else {
-    // 传统模式切换
-    appStore.setCurrentPhraseMode(modeId as PhraseModeType)
-  }
+  scenesStore.switchToMode(modeId)
 }
 
 // 方法 - 编辑器管理
@@ -286,11 +256,7 @@ onMounted(async () => {
   })
 })
 
-// 监听器
-watch(currentSelection, (newSelection) => {
-  // 同步更新传统模式状态
-  appStore.setCurrentPhraseMode(newSelection.modeId)
-}, { deep: true })
+// 监听器 - 传统模式同步逻辑已移除
 
 watch(currentModeId, async () => {
   if (showModal.value) {

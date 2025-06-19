@@ -12,7 +12,8 @@
     "@heroicons/vue": "^2.1.5",
     "pinia": "^3.0.3",
     "socket.io-client": "^4.8.1",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-draggable-plus": "^0.6.0"
   },
   "devDependencies": {
     "@stagewise/toolbar-vue": "^0.4.4",

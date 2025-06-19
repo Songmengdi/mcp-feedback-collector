@@ -29,7 +29,7 @@ export type MessageType = 'success' | 'error' | 'warning' | 'info'
 export type TabType = 'report' | 'feedback'
 
 // 快捷语模式类型
-export type PhraseModeType = 'discuss' | 'edit' | 'search'
+// PhraseModeType已移除，现在完全使用场景化模式
 
 // ===== 新增场景化相关类型定义 =====
 

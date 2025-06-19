@@ -207,49 +207,60 @@
               </button>
             </div>
             
-            <div v-if="getSceneModes(managementSelectedScene.id).length === 0" class="empty-modes">
+            <div v-if="currentModesList.length === 0" class="empty-modes">
               <p>此场景暂无模式</p>
             </div>
             <div v-else class="modes-detail-list">
-              <div 
-                v-for="mode in getSceneModes(managementSelectedScene.id)" 
-                :key="mode.id"
-                class="mode-detail-item"
+              {{ currentModesList.length }}
+              <VueDraggable
+                v-model="currentModesList"
+                :animation="200"
+                ghostClass="mode-ghost"
+                chosenClass="mode-chosen"
+                :disabled="saving"
+                @end="handleModeReorder"
               >
-                <div class="mode-info">
-                  <div class="mode-header">
-                    <span class="mode-name">{{ mode.name }}</span>
-                    <div class="mode-badges">
-                      <span v-if="mode.isDefault" class="badge default">默认</span>
-                      <span v-if="mode.shortcut" class="badge shortcut">{{ mode.shortcut }}</span>
+                <div 
+                  v-for="mode in currentModesList" 
+                  :key="mode.id"
+                  class="mode-detail-item"
+                >
+                  <div class="drag-handle" title="拖拽排序">⋮⋮</div>
+                  <div class="mode-info">
+                    <div class="mode-header">
+                      <span class="mode-name">{{ mode.name }}</span>
+                      <div class="mode-badges">
+                        <span v-if="mode.isDefault" class="badge default">默认</span>
+                        <span v-if="mode.shortcut" class="badge shortcut">{{ mode.shortcut }}</span>
+                      </div>
                     </div>
+                    <p class="mode-description">{{ mode.description }}</p>
                   </div>
-                  <p class="mode-description">{{ mode.description }}</p>
+                  <div class="mode-actions">
+                    <button 
+                      class="icon-btn small" 
+                      @click="editMode(managementSelectedScene, mode)"
+                      title="编辑模式"
+                    >
+                      <PencilIcon class="icon" />
+                    </button>
+                    <button 
+                      class="icon-btn small" 
+                      @click="editModePrompt(managementSelectedScene, mode)"
+                      title="编辑提示词"
+                    >
+                      <DocumentTextIcon class="icon" />
+                    </button>
+                    <button 
+                      class="icon-btn small delete" 
+                      @click="deleteMode(managementSelectedScene, mode)"
+                      title="删除模式"
+                    >
+                      <TrashIcon class="icon" />
+                    </button>
+                  </div>
                 </div>
-                <div class="mode-actions">
-                  <button 
-                    class="icon-btn small" 
-                    @click="editMode(managementSelectedScene, mode)"
-                    title="编辑模式"
-                  >
-                    <PencilIcon class="icon" />
-                  </button>
-                  <button 
-                    class="icon-btn small" 
-                    @click="editModePrompt(managementSelectedScene, mode)"
-                    title="编辑提示词"
-                  >
-                    <DocumentTextIcon class="icon" />
-                  </button>
-                  <button 
-                    class="icon-btn small delete" 
-                    @click="deleteMode(managementSelectedScene, mode)"
-                    title="删除模式"
-                  >
-                    <TrashIcon class="icon" />
-                  </button>
-                </div>
-              </div>
+              </VueDraggable>
             </div>
           </div>
         </div>
@@ -446,6 +457,7 @@ import { useAppStore } from '../stores/app'
 import type { Scene, SceneMode, SceneRequest, SceneModeRequest, SceneConfigExport } from '../types/app'
 import { promptService } from '../services/promptService'
 import PromptEditor from './PromptEditor.vue'
+import { VueDraggable } from 'vue-draggable-plus'
 
 // 获取全局消息显示方法
 const showStatusMessage = inject<(type: 'success' | 'error' | 'warning' | 'info', message: string, autoRemove?: boolean) => void>('showStatusMessage')
@@ -520,6 +532,22 @@ const importPreview = ref<SceneConfigExport | null>(null)
 // 提示词编辑器相关
 const promptEditorRef = ref<InstanceType<typeof PromptEditor>>()
 
+// 拖拽相关 - 为拖拽组件提供的响应式数据
+const currentModesList = computed({
+  get: () => {
+    if (!managementSelectedScene.value) return []
+    return getSceneModes(managementSelectedScene.value.id)
+  },
+  set: (newList: SceneMode[]) => {
+    // vue-draggable-plus会自动更新这个值，我们在@end事件中处理业务逻辑
+    if (managementSelectedScene.value) {
+      const newMap = new Map(sceneModeData.value)
+      newMap.set(managementSelectedScene.value.id, newList)
+      sceneModeData.value = newMap
+    }
+  }
+})
+
 // 方法
 
 const selectSceneSelection = (scene: Scene) => {
@@ -527,11 +555,18 @@ const selectSceneSelection = (scene: Scene) => {
 }
 
 const openSceneDetail = async (scene: Scene) => {
+  console.log('[SceneManagement] 打开场景详情:', scene.id, scene.name)
+  
   managementSelectedScene.value = scene
   showDetailSidebar.value = true
   
   // 确保场景模式数据已加载
-  await loadSceneModes(scene.id)
+  await loadSceneModes(scene.id, true) // 强制重新加载
+  
+  // 强制触发响应式更新
+  await nextTick()
+  
+  console.log('[SceneManagement] 场景详情已打开，模式数量:', getSceneModes(scene.id).length)
 }
 
 const closeDetailSidebar = () => {
@@ -541,7 +576,10 @@ const closeDetailSidebar = () => {
 
 // 加载场景模式数据
 const loadSceneModes = async (sceneId: string, forceReload: boolean = false): Promise<void> => {
+  console.log('[SceneManagement] loadSceneModes 开始:', { sceneId, forceReload, isLoading: loadingSceneModes.value.has(sceneId) })
+  
   if (!forceReload && loadingSceneModes.value.has(sceneId)) {
+    console.log('[SceneManagement] 跳过重复加载:', sceneId)
     return // 避免重复加载
   }
   
@@ -571,11 +609,17 @@ const loadSceneModes = async (sceneId: string, forceReload: boolean = false): Pr
       }
     })
     
-    // 更新响应式数据
-    sceneModeData.value.set(sceneId, sortedModes)
+    // 更新响应式数据 - 创建新的Map实例确保响应式更新
+    const newMap = new Map(sceneModeData.value)
+    newMap.set(sceneId, sortedModes)
+    sceneModeData.value = newMap
+    
+    console.log('[SceneManagement] 场景模式数据已更新:', { sceneId, modesCount: sortedModes.length })
   } catch (error) {
     // 错误已通过全局错误处理器显示
-    sceneModeData.value.set(sceneId, [])
+    const newMap = new Map(sceneModeData.value)
+    newMap.set(sceneId, [])
+    sceneModeData.value = newMap
   } finally {
     loadingSceneModes.value.delete(sceneId)
   }
@@ -584,11 +628,16 @@ const loadSceneModes = async (sceneId: string, forceReload: boolean = false): Pr
 // 获取场景模式数据（同步访问响应式数据）
 const getSceneModes = (sceneId: string): SceneMode[] => {
   const modes = sceneModeData.value.get(sceneId)
+  
   if (!modes && !loadingSceneModes.value.has(sceneId)) {
     // 如果没有数据且没在加载中，触发加载
+    console.log('[SceneManagement] 触发异步加载场景模式:', sceneId)
     loadSceneModes(sceneId)
   }
-  return modes || []
+  
+  const result = modes || []
+  console.log('[SceneManagement] getSceneModes:', { sceneId, modesCount: result.length, hasData: !!modes })
+  return result
 }
 
 const getSceneModeCount = (sceneId: string): number => {
@@ -639,7 +688,9 @@ const saveScene = async () => {
     } else {
       const newScene = await scenesStore.createScene(sceneForm.value)
       // 为新场景初始化空的模式数据
-      sceneModeData.value.set(newScene.id, [])
+      const newMap = new Map(sceneModeData.value)
+      newMap.set(newScene.id, [])
+      sceneModeData.value = newMap
     }
     closeSceneDialog()
   } catch (error) {
@@ -660,7 +711,9 @@ const duplicateScene = async (scene: Scene) => {
   try {
     const duplicatedScene = await scenesStore.createScene(newSceneData)
     // 为复制的场景初始化空的模式数据
-    sceneModeData.value.set(duplicatedScene.id, [])
+    const newMap = new Map(sceneModeData.value)
+    newMap.set(duplicatedScene.id, [])
+    sceneModeData.value = newMap
   } catch (error) {
     // 错误已通过全局错误处理器显示
   } finally {
@@ -685,7 +738,9 @@ const deleteScene = async (scene: Scene) => {
   try {
     await scenesStore.deleteScene(scene.id)
     // 清理场景模式数据
-    sceneModeData.value.delete(scene.id)
+    const newMap = new Map(sceneModeData.value)
+    newMap.delete(scene.id)
+    sceneModeData.value = newMap
     if (managementSelectedScene.value?.id === scene.id) {
       closeDetailSidebar()
     }
@@ -753,15 +808,33 @@ const closeModeDialog = () => {
   editingModeScene.value = null
 }
 
+/**
+ * 保存模式 - 编辑/新建场景专用方法
+ * 职责：处理模式的编辑和新建操作，包括默认状态的设置和更改
+ * 数据传递：传递完整的modeForm数据，包含isDefault字段，允许后端处理默认状态逻辑
+ * 使用场景：模式编辑对话框的保存操作
+ */
 const saveMode = async () => {
-  if (!modeForm.value.name.trim() || !editingModeScene.value) return
+  console.log('[SceneManagement] saveMode 编辑场景调用:', {
+    操作类型: editingMode.value ? '更新模式' : '新建模式',
+    模式名称: modeForm.value.name,
+    场景ID: editingModeScene.value?.id,
+    模式ID: editingMode.value?.id,
+    默认状态: modeForm.value.isDefault ? '是' : '否'
+  })
+  
+  if (!modeForm.value.name.trim() || !editingModeScene.value) {
+    console.log('[SceneManagement] saveMode 验证失败，提前返回')
+    return
+  }
   
   saving.value = true
   try {
     const sceneId = editingModeScene.value.id
     
     if (editingMode.value) {
-      // 更新模式
+      // 更新模式 - 传递完整的modeForm数据，包括isDefault字段
+      console.log(`[SceneManagement] 编辑更新模式，传递完整数据（包含isDefault: ${modeForm.value.isDefault}）`)
       const updatedMode = await scenesStore.updateSceneMode(
         sceneId, 
         editingMode.value.id, 
@@ -771,9 +844,11 @@ const saveMode = async () => {
       // 如果更新了默认状态，需要同步表单数据以保持UI一致性
       if (modeForm.value.isDefault !== undefined) {
         modeForm.value.isDefault = updatedMode.isDefault
+        console.log(`[SceneManagement] 默认状态已同步: ${updatedMode.isDefault}`)
       }
     } else {
-      // 创建新模式
+      // 创建新模式 - 传递完整的modeForm数据，包括isDefault字段
+      console.log(`[SceneManagement] 新建模式，传递完整数据（包含isDefault: ${modeForm.value.isDefault}）`)
       await scenesStore.addSceneMode(sceneId, modeForm.value)
     }
     
@@ -781,7 +856,9 @@ const saveMode = async () => {
     
     // 强制重新加载场景模式数据以获取最新状态
     await loadSceneModes(sceneId, true)
+    console.log(`[SceneManagement] saveMode 编辑场景完成`)
   } catch (error) {
+    console.error('[SceneManagement] saveMode 编辑场景失败:', error)
     // 错误已通过全局错误处理器显示
   } finally {
     saving.value = false
@@ -991,7 +1068,7 @@ const importConfig = async () => {
     await scenesStore.loadScenes()
     
     // 清空现有数据，重新按需加载
-    sceneModeData.value.clear()
+    sceneModeData.value = new Map()
     await preloadVisibleSceneModes()
     
     // 显示成功消息
@@ -1047,15 +1124,259 @@ const handleDefaultFeedbackSave = async (event: Event) => {
   const customEvent = event as CustomEvent
   const { sceneId, modeId, defaultFeedback } = customEvent.detail
   
+  console.log('[SceneManagement] handleDefaultFeedbackSave 调用:', { sceneId, modeId, defaultFeedback })
+  
   try {
-    // 更新模式的默认反馈内容
-    await scenesStore.updateSceneMode(sceneId, modeId, { defaultFeedback })
+    // 获取当前模式的完整信息，确保包含name和description
+    const currentMode = getSceneModes(sceneId).find(m => m.id === modeId)
+    if (!currentMode) {
+      throw new Error(`找不到模式: ${modeId}`)
+    }
+    
+    // 更新模式的默认反馈内容，包含所有必需字段
+    await scenesStore.updateSceneMode(sceneId, modeId, {
+      name: currentMode.name,           // 必须包含name
+      description: currentMode.description, // 必须包含description
+      shortcut: currentMode.shortcut,
+      isDefault: currentMode.isDefault,
+      sortOrder: currentMode.sortOrder,
+      defaultFeedback // 更新目标字段
+    })
     
     // 触发保存完成事件
     window.dispatchEvent(new CustomEvent('defaultFeedbackSaveComplete'))
   } catch (error) {
     // 错误已通过全局错误处理器显示
     throw error
+  }
+}
+
+// 拖拽排序完成处理
+const handleModeReorder = async (event: any) => {
+  if (!managementSelectedScene.value) return
+  
+  const { oldIndex, newIndex } = event
+  if (oldIndex === newIndex) return
+  
+  saving.value = true
+  try {
+    const sceneId = managementSelectedScene.value.id
+    const newOrderedModes = currentModesList.value
+    
+    // 重新分配快捷键和sortOrder
+    const updates = reassignShortcutsAndOrder(newOrderedModes)
+    
+    if (updates.length > 0) {
+      // 批量更新 - 使用拖拽后的数据，并获取最新数据
+      const latestModes = await batchUpdateModes(sceneId, newOrderedModes, updates)
+      
+      // 直接更新本地缓存，避免重复API调用
+      const newMap = new Map(sceneModeData.value)
+      newMap.set(sceneId, latestModes)
+      sceneModeData.value = newMap
+      
+      showStatusMessage?.('success', '模式排序已更新')
+    }
+  } catch (error) {
+    console.error('拖拽排序失败:', error)
+    showStatusMessage?.('error', '排序更新失败，请重试')
+    
+    // 错误时重新加载数据恢复状态
+    if (managementSelectedScene.value) {
+      await loadSceneModes(managementSelectedScene.value.id, true)
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
+// 重新分配快捷键和排序
+const reassignShortcutsAndOrder = (modes: SceneMode[]) => {
+  const updates: Array<{
+    modeId: string
+    shortcut: string | undefined
+    sortOrder: number
+  }> = []
+  
+  modes.forEach((mode, index) => {
+    const newShortcut = index < 9 ? (index + 1).toString() : undefined
+    const newSortOrder = index
+    
+    // 只有当快捷键或排序发生变化时才更新
+    if (mode.shortcut !== newShortcut || mode.sortOrder !== newSortOrder) {
+      updates.push({
+        modeId: mode.id,
+        shortcut: newShortcut,
+        sortOrder: newSortOrder
+      })
+    }
+  })
+  
+  return updates
+}
+
+/**
+ * 批量处理快捷键冲突 - 拖拽排序后的统一冲突解决
+ * 职责：在批量更新完成后，统一检查和解决快捷键冲突，避免重复API调用
+ * 使用场景：batchUpdateModes完成后调用
+ * @returns 返回冲突处理后的最新模式数据
+ */
+const handleBatchShortcutConflicts = async (
+  sceneId: string,
+  updates: Array<{
+    modeId: string
+    shortcut: string | undefined
+    sortOrder: number
+  }>
+): Promise<SceneMode[]> => {
+  // 获取涉及快捷键更新的模式
+  const shortcutUpdates = updates.filter(update => 
+    update.shortcut && /^\d$/.test(update.shortcut)
+  )
+  
+  if (shortcutUpdates.length === 0) {
+    console.log('[handleBatchShortcutConflicts] 无快捷键更新，跳过冲突检查')
+    // 仍需获取最新数据返回
+    return await promptService.getSceneModes(sceneId)
+  }
+  
+  console.log(`[handleBatchShortcutConflicts] 检查 ${shortcutUpdates.length} 个快捷键更新的冲突`)
+  
+  // 获取最新的场景模式数据（第一次调用）
+  const allModes = await promptService.getSceneModes(sceneId)
+  
+  // 构建快捷键使用情况映射
+  const shortcutMap = new Map<string, string>() // shortcut -> modeId
+  allModes.forEach(mode => {
+    if (mode.shortcut && /^\d$/.test(mode.shortcut)) {
+      const existingModeId = shortcutMap.get(mode.shortcut)
+      if (existingModeId && existingModeId !== mode.id) {
+        // 发现冲突，需要解决
+        console.log(`[handleBatchShortcutConflicts] 发现快捷键冲突: ${mode.shortcut} 被模式 ${existingModeId} 和 ${mode.id} 同时使用`)
+      }
+      shortcutMap.set(mode.shortcut, mode.id)
+    }
+  })
+  
+  // 检查是否有重复的快捷键，如有则解决冲突
+  const conflictResolutions: Promise<void>[] = []
+  const usedShortcuts = new Set<string>()
+  
+  // 遍历所有模式，解决冲突
+  allModes.forEach(mode => {
+    if (mode.shortcut && /^\d$/.test(mode.shortcut)) {
+      if (usedShortcuts.has(mode.shortcut)) {
+        // 发现冲突，为后面的模式分配新快捷键
+        const conflictResolution = resolveShortcutConflict(sceneId, mode, usedShortcuts)
+        conflictResolutions.push(conflictResolution)
+      } else {
+        usedShortcuts.add(mode.shortcut)
+      }
+    }
+  })
+  
+  // 等待所有冲突解决完成
+  if (conflictResolutions.length > 0) {
+    await Promise.all(conflictResolutions)
+    console.log(`[handleBatchShortcutConflicts] 已解决 ${conflictResolutions.length} 个快捷键冲突`)
+    // 如果有冲突解决，需要重新获取最新数据
+    return await promptService.getSceneModes(sceneId)
+  } else {
+    console.log('[handleBatchShortcutConflicts] 无快捷键冲突需要解决')
+    // 无冲突时直接返回之前获取的数据
+    return allModes
+  }
+}
+
+/**
+ * 解决单个模式的快捷键冲突
+ */
+const resolveShortcutConflict = async (
+  sceneId: string, 
+  conflictMode: SceneMode, 
+  usedShortcuts: Set<string>
+): Promise<void> => {
+  // 找到下一个可用的快捷键数字
+  let nextShortcut = 1
+  while (nextShortcut <= 9 && usedShortcuts.has(nextShortcut.toString())) {
+    nextShortcut++
+  }
+  
+  const newShortcut = nextShortcut <= 9 ? nextShortcut.toString() : ''
+  
+  // 更新冲突模式的快捷键
+  await scenesStore.updateSceneMode(sceneId, conflictMode.id, {
+    name: conflictMode.name,
+    description: conflictMode.description,
+    shortcut: newShortcut,
+    isDefault: conflictMode.isDefault,
+    sortOrder: conflictMode.sortOrder,
+    defaultFeedback: conflictMode.defaultFeedback
+  }, true) // 跳过冲突检查，避免递归
+  
+  if (newShortcut) {
+    usedShortcuts.add(newShortcut)
+    console.log(`快捷键冲突已解决：模式"${conflictMode.name}"的快捷键从"${conflictMode.shortcut}"改为"${newShortcut}"`)
+  } else {
+    console.log(`快捷键冲突已解决：模式"${conflictMode.name}"的快捷键已清除（1-9已全部占用）`)
+  }
+}
+
+/**
+ * 批量更新模式 - 拖拽排序专用方法
+ * @returns 返回批量更新后的最新模式数据
+ */
+const batchUpdateModes = async (
+  sceneId: string, 
+  modes: SceneMode[], // 传入完整的模式数据，确保数据一致性
+  updates: Array<{
+    modeId: string
+    shortcut: string | undefined
+    sortOrder: number
+  }>
+): Promise<SceneMode[]> => {
+  console.log(`[batchUpdateModes] 开始拖拽排序更新，场景: ${sceneId}, 更新数量: ${updates.length}`)
+  
+  // 由于后端暂无批量更新API，使用并行单个更新
+  const updatePromises = updates.map(update => {
+    // 从传入的modes数组中获取当前模式的完整信息，确保数据一致性
+    const currentMode = modes.find(m => m.id === update.modeId)
+    if (!currentMode) {
+      throw new Error(`找不到模式: ${update.modeId}`)
+    }
+    
+    // 构建更新数据 - 拖拽排序时不传递isDefault，避免后端重复清除默认状态
+    const updateData: any = {
+      name: currentMode.name,           // 必须包含name
+      description: currentMode.description, // 必须包含description
+      shortcut: update.shortcut,
+      sortOrder: update.sortOrder,
+      defaultFeedback: currentMode.defaultFeedback
+    }
+    
+    console.log(`[batchUpdateModes] 拖拽排序更新模式 ${currentMode.name}:`, {
+      modeId: update.modeId,
+      shortcut: update.shortcut,
+      sortOrder: update.sortOrder,
+      保持默认状态: currentMode.isDefault ? '是' : '否'
+    })
+    
+    // 批量操作时跳过快捷键冲突检查，由外层统一处理
+    return scenesStore.updateSceneMode(sceneId, update.modeId, updateData, true)
+  })
+  
+  await Promise.all(updatePromises)
+  
+  // 批量更新完成后，进行统一的快捷键冲突检查和解决，并获取最新数据
+  try {
+    const latestModes = await handleBatchShortcutConflicts(sceneId, updates)
+    console.log(`[batchUpdateModes] 拖拽排序更新完成，场景: ${sceneId}`)
+    return latestModes
+  } catch (error) {
+    console.warn('[batchUpdateModes] 快捷键冲突解决失败:', error)
+    // 发生错误时，仍需返回最新数据，通过直接调用API获取
+    console.log(`[batchUpdateModes] 错误恢复：重新获取场景模式数据`)
+    return await promptService.getSceneModes(sceneId)
   }
 }
 
@@ -1578,8 +1899,55 @@ const preloadVisibleSceneModes = async () => {
   border-radius: 6px;
   padding: 12px;
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  transition: all 0.2s ease;
+  cursor: grab;
+}
+
+.mode-detail-item:active {
+  cursor: grabbing;
+}
+
+.mode-detail-item:hover {
+  border-color: #007acc;
+  background: #2d2d30;
+}
+
+/* 拖拽手柄样式 */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 40px;
+  color: #969696;
+  cursor: grab;
+  margin-right: 8px;
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.drag-handle:hover {
+  color: #007acc;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* vue-draggable-plus提供的样式类 */
+.mode-ghost {
+  opacity: 0.5;
+  background: #2d2d30;
+  border: 2px dashed #007acc;
+}
+
+.mode-chosen {
+  background: #1e2a3a;
+  border-color: #007acc;
+  transform: scale(0.98);
 }
 
 .mode-info {
@@ -1633,6 +2001,7 @@ const preloadVisibleSceneModes = async () => {
   display: flex;
   gap: 4px;
   margin-left: 8px;
+  flex-shrink: 0;
 }
 
 /* 模态框样式 */

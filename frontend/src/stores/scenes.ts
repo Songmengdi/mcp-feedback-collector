@@ -11,8 +11,8 @@ export const useScenesStore = defineStore('scenes', () => {
   
   // 当前选择的场景和模式
   const currentSelection = ref<CurrentSelection>({
-    sceneId: 'default',
-    modeId: 'discuss'
+    sceneId: '', // 修复：不再硬编码default场景
+    modeId: ''   // 修复：不再硬编码discuss模式
   })
   
   // 当前场景下的模式列表
@@ -261,12 +261,17 @@ export const useScenesStore = defineStore('scenes', () => {
   /**
    * 更新场景模式
    */
-  const updateSceneMode = async (sceneId: string, modeId: string, modeData: Partial<SceneModeRequest>): Promise<SceneMode> => {
+  const updateSceneMode = async (
+    sceneId: string, 
+    modeId: string, 
+    modeData: Partial<SceneModeRequest>, 
+    skipConflictCheck: boolean = false
+  ): Promise<SceneMode> => {
     saving.value = true
     
     try {
-      // 如果更新了快捷键，检查冲突并处理
-      if (modeData.shortcut !== undefined && modeData.shortcut && /^\d$/.test(modeData.shortcut)) {
+      // 如果更新了快捷键且未跳过冲突检查，检查冲突并处理
+      if (!skipConflictCheck && modeData.shortcut !== undefined && modeData.shortcut && /^\d$/.test(modeData.shortcut)) {
         await handleShortcutConflict(sceneId, modeData.shortcut, modeId)
       }
       
@@ -289,8 +294,8 @@ export const useScenesStore = defineStore('scenes', () => {
             currentSceneModes.value[index] = updatedMode
           }
           
-          // 如果更新了快捷键，需要重新排序
-          if (modeData.shortcut !== undefined) {
+          // 如果更新了快捷键且未跳过冲突检查，需要重新排序
+          if (!skipConflictCheck && modeData.shortcut !== undefined) {
             currentSceneModes.value = sortSceneModes(currentSceneModes.value)
           }
         }
@@ -383,13 +388,27 @@ export const useScenesStore = defineStore('scenes', () => {
   
   // ===== 快捷键冲突处理 =====
   
+  // 请求去重缓存 - 避免重复的getSceneModes调用
+  const conflictCheckCache = new Map<string, Promise<SceneMode[]>>()
+  
   /**
    * 处理快捷键冲突
    */
   const handleShortcutConflict = async (sceneId: string, shortcut: string, excludeModeId: string | null): Promise<void> => {
     try {
-      // 获取场景下所有模式
-      const allModes = await promptService.getSceneModes(sceneId)
+      // 使用缓存避免重复的API调用
+      let allModesPromise = conflictCheckCache.get(sceneId)
+      if (!allModesPromise) {
+        allModesPromise = promptService.getSceneModes(sceneId)
+        conflictCheckCache.set(sceneId, allModesPromise)
+        
+        // 设置缓存过期，避免数据过时
+        setTimeout(() => {
+          conflictCheckCache.delete(sceneId)
+        }, 1000) // 1秒后清除缓存
+      }
+      
+      const allModes = await allModesPromise
       
       // 查找使用相同快捷键的模式（排除当前编辑的模式）
       const conflictMode = allModes.find(mode => 
@@ -414,16 +433,26 @@ export const useScenesStore = defineStore('scenes', () => {
         }
         
         if (nextShortcut <= 9) {
-          // 更新冲突模式的快捷键
+          // 更新冲突模式的快捷键，包含所有必需字段
           await promptService.updateSceneMode(sceneId, conflictMode.id, {
-            shortcut: nextShortcut.toString()
+            name: conflictMode.name,                    // 必须包含name
+            description: conflictMode.description,      // 必须包含description
+            shortcut: nextShortcut.toString(),          // 更新目标字段
+            isDefault: conflictMode.isDefault,          // 保持其他字段不变
+            sortOrder: conflictMode.sortOrder,
+            defaultFeedback: conflictMode.defaultFeedback
           })
           
           console.log(`快捷键冲突已解决：模式"${conflictMode.name}"的快捷键从"${shortcut}"改为"${nextShortcut}"`)
         } else {
-          // 如果1-9都被占用，清除冲突模式的快捷键
+          // 如果1-9都被占用，清除冲突模式的快捷键，包含所有必需字段
           await promptService.updateSceneMode(sceneId, conflictMode.id, {
-            shortcut: ''
+            name: conflictMode.name,                    // 必须包含name
+            description: conflictMode.description,      // 必须包含description
+            shortcut: '',                               // 更新目标字段
+            isDefault: conflictMode.isDefault,          // 保持其他字段不变
+            sortOrder: conflictMode.sortOrder,
+            defaultFeedback: conflictMode.defaultFeedback
           })
           
           console.log(`快捷键冲突已解决：模式"${conflictMode.name}"的快捷键已清除（1-9已全部占用）`)
@@ -473,7 +502,8 @@ export const useScenesStore = defineStore('scenes', () => {
    */
   const reset = (): void => {
     scenes.value = []
-    currentSelection.value = { sceneId: 'default', modeId: 'discuss' }
+    // 修复：不再硬编码default场景，使用空值
+    currentSelection.value = { sceneId: '', modeId: '' }
     currentSceneModes.value = []
     loading.value = false
     error.value = null
