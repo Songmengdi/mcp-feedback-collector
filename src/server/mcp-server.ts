@@ -70,7 +70,7 @@ export class MCPServer {
       {
         description: 'Collect feedback from users about AI work summary. This tool opens a web interface for users to provide feedback on the AI\'s work.',
         inputSchema: {
-          work_summary: z.string().describe('AI工作汇报内容，描述AI完成的工作和结果')
+          work_summary: z.string().describe('Briefly describe the work you have completed (within 200 words)')
         }
       },
       async (args: { work_summary: string }): Promise<CallToolResult> => {
@@ -359,16 +359,12 @@ export class MCPServer {
       content.push({
         type: 'text',
         text: `
-# 反馈工具
-- 使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
+# Feedback Tool
+- Use the "collect_feedback" tool from the MCP service "mcp-feedback-collector" to collect feedback.
+- **If a tool call fails or the user cancels manually, you should retry calling the tool instead of ending the process immediately.**
 
-## 必须遵循要求(强制性规则(必须遵守,非常重要))
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
+## Required Guidelines (Mandatory Rules - Must be followed, very important)
+- **Whenever you are about to complete a user request, use the "collect_feedback" tool from the MCP service "mcp-feedback-collector" to collect feedback. Do not simply end the process. Continue calling the MCP until the user provides no further feedback, then conclude the request.**
 `
       })
       // 添加时间戳
