@@ -6,7 +6,6 @@
 export { createDefaultConfig, getConfig, validateConfig } from './config/index.js';
 export { MCPServer } from './server/mcp-server.js';
 export { ServerCoordinator } from './server/server-coordinator.js';
-export { ToolbarServer } from './server/toolbar-server.js';
 export { logger } from './utils/logger.js';
 
 // 导出类型定义
