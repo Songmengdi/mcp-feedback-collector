@@ -1,27 +1,57 @@
 {
   "name": "standalone-toolbar-service",
-  "version": "1.0.0",
-  "description": "独立的Stagewise工具栏服务 - 支持SRPC通信和WebSocket广播",
-  "main": "dist/main.js",
+  "version": "1.0.1",
+  "description": "独立的Stagewise工具栏服务 - 支持SRPC通信和WebSocket广播，可与MCP反馈收集器集成",
+  "bin": {
+    "standalone-toolbar-service": "dist/main.js"
+  },
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
-    "clean": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')){fs.rmSync('dist', {recursive: true, force: true})}\""
+    "clean": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')){fs.rmSync('dist', {recursive: true, force: true})}\"",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "keywords": [
     "stagewise",
     "toolbar",
     "srpc",
     "websocket",
-    "mcp"
+    "mcp",
+    "feedback-collector",
+    "cursor-plugin",
+    "development-tools",
+    "rpc-server",
+    "cli",
+    "command-line"
   ],
-  "author": "SMD",
+  "author": {
+    "name": "SMD",
+    "email": "songmengdi@example.com"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/mcp-feedback-collector.git",
+    "directory": "toolbar"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/mcp-feedback-collector/issues"
+  },
+  "homepage": "https://github.com/your-username/mcp-feedback-collector#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",

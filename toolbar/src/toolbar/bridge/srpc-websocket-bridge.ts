@@ -60,30 +60,23 @@ export type RpcMethods = Record<string, RpcMethodDefinition<any, any, any>>;
  */
 export class SRPCWebSocketBridge {
   private wss: WebSocketServer;
-  private ws: NodeWebSocket | null = null;
+  private connections: Map<string, NodeWebSocket> = new Map();
   private methods: RpcMethods = {};
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server });
 
     this.wss.on('connection', (ws: NodeWebSocket) => {
-      console.log('[SRPC] WebSocket client connected');
+      const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`[SRPC] WebSocket client connected: ${connectionId}`);
       
-      if (this.ws) {
-        console.warn('[SRPC] New WebSocket connection attempted while one is already active. Closing existing connection first.');
-        const oldWs = this.ws;
-        this.ws = null;
-        oldWs.close();
-      }
-
-      this.ws = ws;
-      this.setupWebSocketHandlers(ws);
+      // 添加连接到连接池
+      this.connections.set(connectionId, ws);
+      this.setupWebSocketHandlers(ws, connectionId);
 
       ws.on('close', () => {
-        console.log('[SRPC] WebSocket client disconnected');
-        if (this.ws === ws) {
-          this.ws = null;
-        }
+        console.log(`[SRPC] WebSocket client disconnected: ${connectionId}`);
+        this.connections.delete(connectionId);
       });
     });
   }
@@ -103,80 +96,82 @@ export class SRPCWebSocketBridge {
   /**
    * 设置WebSocket事件处理器
    */
-  private setupWebSocketHandlers(ws: NodeWebSocket): void {
+  private setupWebSocketHandlers(ws: NodeWebSocket, connectionId: string): void {
     ws.on('message', (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString()) as WebSocketMessage;
-        console.log('[SRPC] Received message:', message);
-        this.handleMessage(message);
+        console.log(`[SRPC] Received message from ${connectionId}:`, message);
+        this.handleMessage(message, ws, connectionId);
       } catch (error) {
-        console.error('[SRPC] Error handling WebSocket message:', error);
+        console.error(`[SRPC] Error handling WebSocket message from ${connectionId}:`, error);
       }
     });
 
     ws.on('error', (error) => {
-      console.error('[SRPC] WebSocket error:', error);
+      console.error(`[SRPC] WebSocket error for ${connectionId}:`, error);
     });
   }
 
   /**
    * 处理传入的WebSocket消息
    */
-  private handleMessage(message: WebSocketMessage): void {
+  private handleMessage(message: WebSocketMessage, ws: NodeWebSocket, connectionId: string): void {
     const { messageType } = message;
 
     switch (messageType) {
       case 'request':
-        this.handleRequest(message as RequestMessage);
+        this.handleRequest(message as RequestMessage, ws, connectionId);
         break;
       case 'response':
-        console.log('[SRPC] Received response:', message);
+        console.log(`[SRPC] Received response from ${connectionId}:`, message);
         break;
       case 'update':
-        console.log('[SRPC] Received update:', message);
+        console.log(`[SRPC] Received update from ${connectionId}:`, message);
         break;
       case 'error':
-        console.error('[SRPC] Received error:', message);
+        console.error(`[SRPC] Received error from ${connectionId}:`, message);
         break;
       default:
-        console.warn(`[SRPC] Unknown message type: ${messageType}`);
+        console.warn(`[SRPC] Unknown message type from ${connectionId}: ${messageType}`);
     }
   }
 
   /**
    * 处理传入的请求
    */
-  private async handleRequest(message: RequestMessage): Promise<void> {
+  private async handleRequest(message: RequestMessage, ws: NodeWebSocket, connectionId: string): Promise<void> {
     const { id, method, payload } = message;
 
     if (!method) {
-      this.sendError(id, 'Method name is required');
+      this.sendError(id, 'Method name is required', ws, connectionId);
       return;
     }
 
     const methodDef = this.methods[method];
     if (!methodDef) {
-      this.sendError(id, `Method not found: ${method}`);
+      this.sendError(id, `Method not found: ${method}`, ws, connectionId);
       return;
     }
 
     try {
-      console.log(`[SRPC] Calling method: ${method} with payload:`, payload);
+      console.log(`[SRPC] Calling method: ${method} with payload from ${connectionId}:`, payload);
       
       // 创建发送更新的函数
       const sendUpdate = (update: any) => {
-        this.sendUpdate(id, method, update);
+        this.sendUpdate(id, method, update, ws, connectionId);
       };
 
       // 调用处理器
       const result = await methodDef.handler(payload, sendUpdate);
 
       // 发送最终结果
-      this.sendResponse(id, method, result);
+      this.sendResponse(id, method, result, ws, connectionId);
     } catch (error) {
       this.sendError(
         id,
         error instanceof Error ? error.message : String(error),
+        ws,
+        connectionId
       );
     }
   }
@@ -184,9 +179,9 @@ export class SRPCWebSocketBridge {
   /**
    * 发送响应消息
    */
-  private sendResponse(id: string, method: string, payload: any): void {
-    if (!this.ws) {
-      throw new Error('WebSocket is not connected');
+  private sendResponse(id: string, method: string, payload: any, ws: NodeWebSocket, connectionId: string): void {
+    if (!ws || ws.readyState !== ws.OPEN) {
+      throw new Error(`WebSocket connection ${connectionId} is not open`);
     }
 
     const responseMessage: ResponseMessage = {
@@ -196,16 +191,16 @@ export class SRPCWebSocketBridge {
       payload,
     };
 
-    console.log('[SRPC] Sending response:', responseMessage);
-    this.ws.send(JSON.stringify(responseMessage));
+    console.log(`[SRPC] Sending response to ${connectionId}:`, responseMessage);
+    ws.send(JSON.stringify(responseMessage));
   }
 
   /**
    * 发送更新消息
    */
-  private sendUpdate(id: string, method: string, payload: any): void {
-    if (!this.ws) {
-      throw new Error('WebSocket is not connected');
+  private sendUpdate(id: string, method: string, payload: any, ws: NodeWebSocket, connectionId: string): void {
+    if (!ws || ws.readyState !== ws.OPEN) {
+      throw new Error(`WebSocket connection ${connectionId} is not open`);
     }
 
     const updateMessage: UpdateMessage = {
@@ -215,16 +210,16 @@ export class SRPCWebSocketBridge {
       payload,
     };
 
-    console.log('[SRPC] Sending update:', updateMessage);
-    this.ws.send(JSON.stringify(updateMessage));
+    console.log(`[SRPC] Sending update to ${connectionId}:`, updateMessage);
+    ws.send(JSON.stringify(updateMessage));
   }
 
   /**
    * 发送错误消息
    */
-  private sendError(id: string, errorMessage: string): void {
-    if (!this.ws) {
-      throw new Error('WebSocket is not connected');
+  private sendError(id: string, errorMessage: string, ws: NodeWebSocket, connectionId: string): void {
+    if (!ws || ws.readyState !== ws.OPEN) {
+      throw new Error(`WebSocket connection ${connectionId} is not open`);
     }
 
     const errorResponse: ErrorMessage = {
@@ -235,15 +230,22 @@ export class SRPCWebSocketBridge {
       },
     };
 
-    console.log('[SRPC] Sending error:', errorResponse);
-    this.ws.send(JSON.stringify(errorResponse));
+    console.log(`[SRPC] Sending error to ${connectionId}:`, errorResponse);
+    ws.send(JSON.stringify(errorResponse));
   }
 
   /**
    * 获取连接状态
    */
   public isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === this.ws.OPEN;
+    return this.connections.size > 0;
+  }
+
+  /**
+   * 获取连接数量
+   */
+  public getConnectionCount(): number {
+    return this.connections.size;
   }
 
   /**
@@ -259,10 +261,13 @@ export class SRPCWebSocketBridge {
   public close(): void {
     console.log('[SRPC] Closing WebSocket server');
     this.wss.close();
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    
+    // 关闭所有连接
+    this.connections.forEach((ws, connectionId) => {
+      console.log(`[SRPC] Closing connection: ${connectionId}`);
+      ws.close();
+    });
+    this.connections.clear();
   }
 }
 

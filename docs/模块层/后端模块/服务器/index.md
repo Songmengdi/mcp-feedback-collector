@@ -17,7 +17,7 @@
 - **[toolbar-server.md](toolbar-server.md)** - 独立Toolbar服务
   - SRPC WebSocket通信
   - Prompt广播机制
-  - 固定端口策略（5749）
+  - 固定端口策略（5748）
   - 多客户端管理
 
 ## 处理器组件
@@ -40,7 +40,7 @@ graph TB
         A --> D[WebSocket服务]
     end
     
-    subgraph "独立Toolbar服务器 (端口5749)"
+    subgraph "独立Toolbar服务器 (端口5748)"
         E[Toolbar Server] --> F[SRPC WebSocket]
         E --> G[广播WebSocket]
         E --> H[RPC Handler]
@@ -68,7 +68,7 @@ graph TB
 ### 独立Toolbar服务器
 - **技术栈**: Node.js + WebSocket + SRPC
 - **功能**: 工具栏通信、prompt广播
-- **端口**: 固定5749端口
+- **端口**: 固定5748端口
 
 ## 部署模式
 
@@ -101,7 +101,7 @@ npm start
 - 支持动态端口分配
 
 ### Toolbar服务器发现
-- 固定使用5749端口
+- 固定使用5748端口
 - Stagewise工具栏通过 `/ping/stagewise` 端点发现
 - 解决多服务实例的发现问题
 

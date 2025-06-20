@@ -1,0 +1,35 @@
+# 源代码文件（只发布编译后的dist目录）
+src/
+tsconfig.json
+*.ts
+!*.d.ts
+
+# 开发和构建文件
+node_modules/
+.env
+.env.*
+logs/
+*.log
+
+# 编辑器和IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 测试文件
+test/
+tests/
+*.test.js
+*.test.ts
+coverage/
+
+# 其他
+*.tgz
+.nyc_output
+.cache 

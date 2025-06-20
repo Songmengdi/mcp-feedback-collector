@@ -2,10 +2,10 @@
 
 ## 服务器概述
 
-**独立Toolbar服务器** 是从MCP Feedback Collector主应用中分离出来的独立服务，专门处理Stagewise工具栏的SRPC通信和Prompt广播功能。该服务运行在固定端口5749上，解决了多服务发现的问题。
+**独立Toolbar服务器** 是从MCP Feedback Collector主应用中分离出来的独立服务，专门处理Stagewise工具栏的SRPC通信和Prompt广播功能。该服务运行在固定端口5748上，解决了多服务发现的问题。
 
 - **服务名称**: Standalone Toolbar Service
-- **固定端口**: 5749
+- **固定端口**: 5748
 - **技术栈**: Node.js + TypeScript + WebSocket + SRPC
 - **主要功能**: SRPC通信、Prompt广播、多客户端管理
 
@@ -17,7 +17,7 @@
 - **双WebSocket支持**: 
   - SRPC端点(/)：用于工具栏连接
   - 广播端点(/broadcast)：用于WebService连接
-- **固定端口策略**: 使用5749端口解决服务发现问题
+- **固定端口策略**: 使用5748端口解决服务发现问题
 - **多客户端管理**: 支持多个WebService同时连接接收广播
 - **优雅关闭**: 支持SIGINT和SIGTERM信号的优雅关闭
 
@@ -83,7 +83,7 @@ export class ToolbarServer {
   private logger: Logger;
 
   constructor(
-    port: number = 5749,
+    port: number = 5748,
     logger?: Logger
   ) {
     this.logger = logger || new Logger('ToolbarServer');
@@ -277,7 +277,7 @@ export class StandaloneToolbarService {
 
   constructor() {
     this.logger = new Logger('StandaloneService');
-    this.toolbarServer = new ToolbarServer(5749, this.logger);
+    this.toolbarServer = new ToolbarServer(5748, this.logger);
     this.setupGracefulShutdown();
   }
 
@@ -343,7 +343,7 @@ if (require.main === module) {
 {
   "status": "ok",
   "service": "standalone-toolbar-service", 
-  "port": 5749,
+  "port": 5748,
   "timestamp": "2024-12-18T10:30:00.000Z",
   "clients": {
     "srpc": 1,
@@ -362,8 +362,8 @@ if (require.main === module) {
   "version": "1.0.0", 
   "capabilities": ["srpc", "prompt-broadcast"],
   "endpoints": {
-    "srpc": "ws://localhost:5749/",
-    "broadcast": "ws://localhost:5749/broadcast"
+      "srpc": "ws://localhost:5748/",
+  "broadcast": "ws://localhost:5748/broadcast"
   }
 }
 ```
@@ -371,12 +371,12 @@ if (require.main === module) {
 ## WebSocket端点
 
 ### SRPC端点
-- **路径**: `ws://localhost:5749/`
+- **路径**: `ws://localhost:5748/`
 - **协议**: SRPC over WebSocket
 - **用途**: Stagewise工具栏连接
 
 ### 广播端点
-- **路径**: `ws://localhost:5749/broadcast`
+- **路径**: `ws://localhost:5748/broadcast`
 - **协议**: 普通WebSocket
 - **用途**: WebService连接接收prompt广播
 
@@ -401,7 +401,7 @@ npm start
 ### 集成示例
 WebService连接广播端点的示例代码：
 ```typescript
-const ws = new WebSocket('ws://localhost:5749/broadcast');
+const ws = new WebSocket('ws://localhost:5748/broadcast');
 
 ws.on('message', (data) => {
   const message = JSON.parse(data.toString());
@@ -431,7 +431,7 @@ ws.on('message', (data) => {
 ## 故障排除
 
 ### 常见问题
-1. **端口占用**: 确保5749端口未被其他服务占用
+1. **端口占用**: 确保5748端口未被其他服务占用
 2. **连接失败**: 检查防火墙设置和网络连接
 3. **广播失败**: 查看日志确认WebSocket连接状态
 4. **内存泄漏**: 定期检查无效连接清理

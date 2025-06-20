@@ -54,7 +54,7 @@ export class ToolbarRPCHandler {
       sessionId: 'standalone-toolbar-service-session-' + Date.now(),
       appName: 'Standalone Toolbar Service',
       displayName: 'Standalone Toolbar Service - WebSocket Broadcast',
-      port: 5749,
+      port: 5748,
       version: '1.0.0',
       features: ['websocket-broadcast', 'toolbar-integration', 'multi-service-support'],
     };
@@ -126,11 +126,11 @@ export class ToolbarRPCHandler {
               mode: mode || 'agent',
               processedAt: new Date().toISOString(),
               service: 'standalone-toolbar-service',
-              version: '1.0.0',
-              broadcasted: true,
-              port: 5749
-            }
-          },
+            version: '1.0.0',
+            broadcasted: true,
+            port: 5748
+          }
+        },
         };
 
         console.log('[Toolbar RPC] Prompt broadcasted successfully:', result);

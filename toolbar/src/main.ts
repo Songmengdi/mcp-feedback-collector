@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { ToolbarServer } from './server/toolbar-server.js';
 import { logger } from './utils/logger.js';
 
@@ -71,8 +73,8 @@ class StandaloneToolbarService {
       logger.info(`[Main] 📡 SRPC连接: ${status.connected ? '已连接' : '等待连接'}`);
       logger.info(`[Main] 🔄 广播客户端: ${status.broadcastClients} 个`);
       logger.info(`[Main] 📋 已注册RPC方法: ${status.registeredMethods.join(', ')}`);
-      logger.info('[Main] 🎯 Stagewise工具栏可以连接到 ws://localhost:5749');
-      logger.info('[Main] 🌐 WebService可以连接到 ws://localhost:5749/broadcast');
+      logger.info('[Main] 🎯 Stagewise工具栏可以连接到 ws://localhost:5748');
+      logger.info('[Main] 🌐 WebService可以连接到 ws://localhost:5748/broadcast');
       
     } catch (error) {
       logger.error('[Main] ❌ 启动独立Toolbar服务失败:', error);
@@ -148,9 +150,7 @@ async function main(): Promise<void> {
 }
 
 // 启动应用
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    logger.error('[Main] ❌ 主函数执行失败:', error);
-    process.exit(1);
-  });
-} 
+main().catch((error) => {
+  logger.error('[Main] ❌ 主函数执行失败:', error);
+  process.exit(1);
+}); 

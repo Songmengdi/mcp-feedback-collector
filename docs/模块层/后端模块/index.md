@@ -16,7 +16,7 @@ graph TB
         B --> E[数据存储]
     end
     
-    subgraph "独立Toolbar服务 (固定端口5749)"
+    subgraph "独立Toolbar服务 (固定端口5748)"
         F[Toolbar Server] --> G[SRPC WebSocket]
         F --> H[广播WebSocket]
         F --> I[RPC Handler]
@@ -60,7 +60,7 @@ graph TB
 ### 独立Toolbar服务器
 - **SRPC通信**: 与Stagewise工具栏的标准通信协议
 - **Prompt广播**: 实时广播到所有WebService实例
-- **固定端口**: 5749端口解决服务发现问题
+- **固定端口**: 5748端口解决服务发现问题
 - **多客户端**: 支持多个WebService同时连接
 
 ## 服务通信
