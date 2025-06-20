@@ -5,7 +5,8 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import path from 'path';
 import { logger } from './logger.js';
 import { MCPError } from '../types/index.js';
 
@@ -77,10 +78,10 @@ export class PromptDatabase {
         baseDir = join(homedir(), '.mcp_feedback');
         break;
       case 'win32': // Windows
-        baseDir = join(process.env['APPDATA'] || join(homedir(), 'AppData', 'Roaming'), 'mcp_feedback');
+        baseDir = join(process.env['APPDATA'] || join(homedir(), 'AppData', 'Roaming'), '.mcp_feedback');
         break;
       default: // Linux and others
-        baseDir = join(process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config'), 'mcp_feedback');
+        baseDir = join(process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config'), '.mcp_feedback');
         break;
     }
 
@@ -91,10 +92,19 @@ export class PromptDatabase {
    * 确保存储目录存在
    */
   private ensureStorageDirectory(): void {
-    const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf('/'));
+    const dir = path.dirname(this.dbPath);
     if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-      logger.info(`创建存储目录: ${dir}`);
+      try {
+        mkdirSync(dir, { recursive: true });
+        logger.info(`创建存储目录: ${dir}`);
+      } catch (error) {
+        logger.error(`创建存储目录失败: ${dir}`, error);
+        throw new MCPError(
+          `Failed to create storage directory: ${dir}`,
+          'STORAGE_DIRECTORY_CREATE_ERROR',
+          error
+        );
+      }
     }
   }
 
