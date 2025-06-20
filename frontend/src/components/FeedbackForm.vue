@@ -9,7 +9,31 @@
     <div class="feedback-body" ref="feedbackBodyRef">
       <form @submit.prevent="handleSubmit">
         <div class="form-group textarea-group">
-          <label class="form-label">反馈内容</label>
+          <div class="feedback-label-row">
+            <span class="form-label">反馈内容</span>
+            <div class="clear-control-group">
+              <label class="switch-label">
+                <span class="switch-text">清理之前对话</span>
+                <div class="switch-container">
+                  <input 
+                    v-model="clearPreviousConversation" 
+                    type="checkbox"
+                    class="switch-input"
+                    @change="handleClearSwitchChange"
+                  />
+                  <span class="switch-slider"></span>
+                </div>
+              </label>
+              <button 
+                type="button"
+                class="edit-prompt-btn"
+                @click="showClearPromptEditor"
+                title="编辑清理提示词"
+              >
+                <PencilIcon class="edit-icon" />
+              </button>
+            </div>
+          </div>
           <textarea
             ref="textareaRef"
             v-model="feedbackText"
@@ -52,6 +76,14 @@
         </div>
       </form>
     </div>
+    
+    <!-- 清理提示词编辑器弹窗 -->
+    <ClearPromptEditor
+      v-if="showEditor"
+      :initial-prompt="currentClearPrompt"
+      @close="hideClearPromptEditor"
+      @saved="handleClearPromptSaved"
+    />
   </div>
 </template>
 
@@ -60,12 +92,15 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import socketService from '../services/socket'
 import promptService from '../services/promptService'
 import shortcutService from '../services/shortcutService'
+import clearPromptService from '../services/clearPromptService'
 import { useConnectionStore } from '../stores/connection'
 import { useFeedbackStore } from '../stores/feedback'
 import { useScenesStore } from '../stores/scenes'
 import type { ImageFile } from '../types/app'
 import ImageUpload from './ImageUpload.vue'
 import PhraseModeSelector from './PhraseModeSelector.vue'
+import ClearPromptEditor from './ClearPromptEditor.vue'
+import { PencilIcon } from './icons'
 
 // Store引用
 const feedbackStore = useFeedbackStore()
@@ -75,9 +110,14 @@ const scenesStore = useScenesStore()
 // 本地状态
 const feedbackText = ref('')
 const isSubmitting = ref(false)
+const clearPreviousConversation = ref(false)
 const textareaHeight = ref('120px') // 动态计算的textarea高度
 const feedbackBodyRef = ref<HTMLElement>()
 const textareaRef = ref<HTMLTextAreaElement>()
+
+// 清理提示词编辑器相关状态
+const showEditor = ref(false)
+const currentClearPrompt = ref('')
 
 // 计算属性
 const shortcutText = computed(() => {
@@ -147,6 +187,67 @@ const getDefaultFeedback = (): string => {
   return shortcutService.getCurrentModeDefaultFeedback()
 }
 
+// 清理开关变化处理
+const handleClearSwitchChange = async () => {
+  if (clearPreviousConversation.value) {
+    // 开启清理时，加载当前清理提示词
+    await loadCurrentClearPrompt()
+  }
+}
+
+// 加载当前清理提示词
+const loadCurrentClearPrompt = async () => {
+  try {
+    feedbackStore.setClearPromptLoading(true)
+    const clearPrompt = await clearPromptService.getClearPrompt()
+    
+    if (clearPrompt) {
+      currentClearPrompt.value = clearPrompt.prompt_text
+      feedbackStore.setClearPrompt(clearPrompt)
+    } else {
+      // 如果没有找到，使用默认提示词
+      currentClearPrompt.value = `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+`
+    }
+    
+    feedbackStore.setClearPromptError('')
+  } catch (error) {
+    console.error('加载清理提示词失败:', error)
+    feedbackStore.setClearPromptError('加载清理提示词失败')
+    // 使用默认提示词作为后备
+    currentClearPrompt.value = `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+`
+  } finally {
+    feedbackStore.setClearPromptLoading(false)
+  }
+}
+
+// 显示清理提示词编辑器
+const showClearPromptEditor = async () => {
+  // 如果开关未开启，先开启开关并加载提示词
+  if (!clearPreviousConversation.value) {
+    clearPreviousConversation.value = true
+    await loadCurrentClearPrompt()
+  }
+  
+  showEditor.value = true
+}
+
+// 隐藏清理提示词编辑器
+const hideClearPromptEditor = () => {
+  showEditor.value = false
+}
+
+// 处理清理提示词保存
+const handleClearPromptSaved = (prompt: string) => {
+  currentClearPrompt.value = prompt
+  showStatusMessage('success', '清理提示词保存成功')
+}
+
 // 表单提交处理
 const handleSubmit = async () => {
   let processedText = feedbackText.value.trim()
@@ -214,7 +315,8 @@ const handleSubmit = async () => {
       type: img.type
     })),
     timestamp: Date.now(),
-    sessionId: feedbackStore.currentFeedbackSession
+    sessionId: feedbackStore.currentFeedbackSession,
+    clearPreviousConversation: clearPreviousConversation.value
   }
 
   console.log('发送反馈数据:', feedbackData)
@@ -420,6 +522,11 @@ onMounted(() => {
     updateShortcutBindings()
   })
   
+  // 初始化清理提示词（如果开关已开启）
+  if (clearPreviousConversation.value) {
+    loadCurrentClearPrompt()
+  }
+  
   document.addEventListener('keydown', handleKeydown)
   
   // 添加窗口尺寸变化监听
@@ -520,6 +627,85 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
+/* 反馈标签行样式 */
+.feedback-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.feedback-label-row .form-label {
+  margin-bottom: 0; /* 重置原有的margin-bottom */
+}
+
+/* 复用开关样式，但调整尺寸 */
+.feedback-label-row .switch-label {
+  display: flex !important;
+  justify-content: flex-end;
+  align-items: center;
+  cursor: pointer;
+  margin: 0;
+  gap: 8px;
+}
+
+.feedback-label-row .switch-text {
+  font-size: 12px;
+  color: #969696;
+  font-weight: 400;
+}
+
+.feedback-label-row .switch-container {
+  position: relative;
+  display: inline-block;
+  width: 36px;  /* 比原来的44px小一些 */
+  height: 20px; /* 比原来的24px小一些 */
+}
+
+.feedback-label-row .switch-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.feedback-label-row .switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #3e3e42;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.feedback-label-row .switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;  /* 调整滑块大小 */
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #cccccc;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.feedback-label-row .switch-input:checked + .switch-slider {
+  background-color: #0e639c; /* 使用与按钮一致的蓝色 */
+}
+
+.feedback-label-row .switch-input:checked + .switch-slider:before {
+  transform: translateX(16px); /* 调整滑动距离 */
+  background-color: white;
+}
+
+.feedback-label-row .switch-slider:hover {
+  box-shadow: 0 0 6px rgba(14, 99, 156, 0.3); /* 使用一致的蓝色 */
+}
+
 .textarea-group {
   flex: 1; /* 让包含textarea的组占据剩余空间 */
   display: flex;
@@ -614,6 +800,46 @@ onUnmounted(() => {
   display: inline-block;
   line-height: 1;
   vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* 清理控制组样式 */
+.clear-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 编辑提示词按钮样式 */
+.edit-prompt-btn {
+  background: none;
+  border: 1px solid #5a5a5a;
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: #cccccc;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+}
+
+.edit-prompt-btn:hover {
+  background-color: #3e3e42;
+  border-color: #0e639c;
+  color: #ffffff;
+}
+
+.edit-prompt-btn:active {
+  background-color: #2d2d30;
+}
+
+.edit-icon {
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 </style>

@@ -1233,6 +1233,84 @@ export class WebServer {
       }
     });
 
+    // ================== 清理提示词API端点 ==================
+    
+    // 获取清理提示词
+    this.app.get('/api/clear-prompt', (req, res) => {
+      try {
+        const clearPrompt = this.promptManager.getClearPrompt();
+        
+        if (!clearPrompt) {
+          res.status(404).json({ 
+            success: false,
+            error: '未找到清理提示词' 
+          });
+          return;
+        }
+        
+        res.json({
+          success: true,
+          data: clearPrompt
+        });
+      } catch (error) {
+        logger.error('获取清理提示词失败:', error);
+        res.status(500).json({ 
+          success: false,
+          error: '获取清理提示词失败',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 保存清理提示词
+    this.app.post('/api/clear-prompt', (req, res) => {
+      try {
+        const promptText = req.body.promptText;
+        
+        if (!promptText || typeof promptText !== 'string') {
+          res.status(400).json({ 
+            success: false,
+            error: '提示词内容不能为空' 
+          });
+          return;
+        }
+        
+        this.promptManager.saveClearPrompt(promptText);
+        
+        res.json({
+          success: true,
+          message: '清理提示词保存成功'
+        });
+      } catch (error) {
+        logger.error('保存清理提示词失败:', error);
+        res.status(500).json({ 
+          success: false,
+          error: '保存清理提示词失败',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
+    // 重置清理提示词为默认值
+    this.app.delete('/api/clear-prompt', (req, res) => {
+      try {
+        const defaultPromptText = this.promptManager.resetClearPrompt();
+        
+        res.json({
+          success: true,
+          message: '清理提示词已重置为默认值',
+          data: { promptText: defaultPromptText }
+        });
+      } catch (error) {
+        logger.error('重置清理提示词失败:', error);
+        res.status(500).json({ 
+          success: false,
+          error: '重置清理提示词失败',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    });
+
     // 错误处理中间件
     this.app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
       logger.error('Express错误:', error);
@@ -1677,7 +1755,7 @@ export class WebServer {
       });
 
       this.toolbarWsClient.on('error', (error: Error) => {
-        logger.error('[WebServer] toolbar WebSocket连接错误:', error);
+        logger.warn('[WebServer] toolbar WebSocket连接错误:', error);
         if (this.toolbarWsClient) {
           this.toolbarWsClient.close();
           this.toolbarWsClient = null;
@@ -1686,7 +1764,7 @@ export class WebServer {
       });
 
     } catch (error) {
-      logger.error('[WebServer] 创建toolbar WebSocket连接失败:', error);
+      logger.warn('[WebServer] 创建toolbar WebSocket连接失败:', error);
       this.scheduleToolbarReconnect();
     }
   }
@@ -1733,7 +1811,7 @@ export class WebServer {
 
     // 检查重连次数限制
     if (this.toolbarReconnectAttempts >= this.maxToolbarReconnectAttempts) {
-      logger.error(`[WebServer] toolbar WebSocket重连次数达到上限 (${this.maxToolbarReconnectAttempts})，停止重连`);
+      logger.warn(`[WebServer] toolbar WebSocket重连次数达到上限 (${this.maxToolbarReconnectAttempts})，停止重连`);
       return;
     }
 

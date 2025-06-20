@@ -46,10 +46,14 @@ export interface ScenePrompt {
   updated_at: number;
 }
 
+export interface ClearPrompt {
+  prompt_text: string;
+}
+
 export class PromptDatabase {
   private db: Database.Database;
   private dbPath: string;
-  private dbVersion: number = 2; // 目标版本号设为2
+  private dbVersion: number = 3; // 目标版本号设为3
 
   constructor() {
     this.dbPath = this.getStoragePath();
@@ -242,6 +246,18 @@ export class PromptDatabase {
       )
     `);
 
+    // 新增清理提示词表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS clear_prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL DEFAULT 'default',
+        prompt_text TEXT NOT NULL,
+        is_default BOOLEAN NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
     // 创建索引以优化查询性能
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_scene_modes_scene_id ON scene_modes (scene_id);
@@ -249,6 +265,7 @@ export class PromptDatabase {
       CREATE INDEX IF NOT EXISTS idx_scene_prompts_mode_id ON scene_prompts (mode_id);
       CREATE INDEX IF NOT EXISTS idx_scenes_sort_order ON scenes (sort_order);
       CREATE INDEX IF NOT EXISTS idx_scene_modes_sort_order ON scene_modes (sort_order);
+      CREATE INDEX IF NOT EXISTS idx_clear_prompts_user_id ON clear_prompts (user_id);
     `);
   }
 
@@ -263,6 +280,12 @@ export class PromptDatabase {
         // 从版本1迁移到版本2：引入场景化架构（包含default_feedback功能）
         logger.info('执行版本1到版本2的迁移：初始化场景化架构');
         this.initializeDefaultScenes();
+      }
+      
+      if (currentVersion < 3) {
+        // 从版本2迁移到版本3：添加清理提示词功能
+        logger.info('执行版本2到版本3的迁移：初始化清理提示词功能');
+        this.initializeDefaultClearPrompt();
       }
       
       logger.info('数据库迁移完成');
@@ -297,6 +320,9 @@ export class PromptDatabase {
       
       initTransaction();
       logger.info('默认场景数据初始化完成');
+      
+      // 初始化默认清理提示词
+      this.initializeDefaultClearPrompt();
     } catch (error) {
       logger.error('初始化默认场景失败:', error);
       throw new MCPError(
@@ -937,5 +963,175 @@ export class PromptDatabase {
    */
   getDatabasePath(): string {
     return this.dbPath;
+  }
+
+  /**
+   * 初始化默认清理提示词
+   */
+  private initializeDefaultClearPrompt(): void {
+    try {
+      // 检查是否已经有默认提示词（is_default = 1）
+      const existingDefault = this.db.prepare(`
+        SELECT COUNT(*) as count FROM clear_prompts 
+        WHERE is_default = 1
+      `).get() as { count: number };
+      
+      if (existingDefault.count > 0) {
+        logger.info('默认清理提示词已存在，跳过初始化');
+        return;
+      }
+
+      logger.info('初始化默认清理提示词...');
+      
+      const now = Date.now();
+      const insertClearPrompt = this.db.prepare(`
+        INSERT INTO clear_prompts (user_id, prompt_text, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
+      insertClearPrompt.run(
+        'default',
+        `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+`,
+        this.convertBooleanForSQLite(true),
+        now,
+        now
+      );
+      
+      logger.info('默认清理提示词初始化完成');
+    } catch (error) {
+      logger.error('初始化默认清理提示词失败:', error);
+      throw new MCPError(
+        'Failed to initialize default clear prompt',
+        'DEFAULT_CLEAR_PROMPT_INIT_ERROR',
+        error
+      );
+    }
+  }
+
+  /**
+   * 获取清理提示词
+   */
+  getClearPrompt(): ClearPrompt | null {
+    try {
+      // 1. 首先尝试获取自定义提示词（is_default = 0）
+      const customPrompt = this.db.prepare(`
+        SELECT prompt_text FROM clear_prompts 
+        WHERE is_default = 0 
+        ORDER BY updated_at DESC 
+        LIMIT 1
+      `).get() as any;
+      
+      if (customPrompt) {
+        return { prompt_text: customPrompt.prompt_text };
+      }
+      
+      // 2. 如果没有自定义提示词，获取默认提示词（is_default = 1）
+      const defaultPrompt = this.db.prepare(`
+        SELECT prompt_text FROM clear_prompts 
+        WHERE is_default = 1 
+        LIMIT 1
+      `).get() as any;
+      
+      if (defaultPrompt) {
+        return { prompt_text: defaultPrompt.prompt_text };
+      }
+      
+      // 3. 如果数据库中完全没有提示词，初始化默认提示词并返回
+      this.initializeDefaultClearPrompt();
+      return { 
+        prompt_text: `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+` 
+      };
+      
+    } catch (error) {
+      // 错误处理：返回硬编码的默认提示词
+      logger.error('获取清理提示词失败:', error);
+      return { 
+        prompt_text: `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+` 
+      };
+    }
+  }
+
+  /**
+   * 保存清理提示词
+   */
+  saveClearPrompt(promptText: string): void {
+    try {
+      const now = Date.now();
+      
+      // 先删除所有自定义提示词（is_default = 0）
+      const deleteStmt = this.db.prepare('DELETE FROM clear_prompts WHERE is_default = 0');
+      deleteStmt.run();
+      
+      // 插入新的自定义提示词
+      const insertStmt = this.db.prepare(`
+        INSERT INTO clear_prompts (user_id, prompt_text, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
+      insertStmt.run(
+        'default',
+        promptText,
+        this.convertBooleanForSQLite(false),
+        now,
+        now
+      );
+      
+      logger.info(`清理提示词已保存: 长度=${promptText.length}`);
+    } catch (error) {
+      logger.error('保存清理提示词失败:', error);
+      throw new MCPError(
+        'Failed to save clear prompt',
+        'SAVE_CLEAR_PROMPT_ERROR',
+        error
+      );
+    }
+  }
+
+  /**
+   * 重置清理提示词为默认值
+   */
+  resetClearPrompt(): string {
+    try {
+      // 1. 删除所有自定义提示词（is_default = 0）
+      const deleteStmt = this.db.prepare('DELETE FROM clear_prompts WHERE is_default = 0');
+      deleteStmt.run();
+      
+      // 2. 确保默认提示词存在
+      const defaultPrompt = this.db.prepare(`
+        SELECT prompt_text FROM clear_prompts 
+        WHERE is_default = 1 
+        LIMIT 1
+      `).get() as any;
+      
+      if (!defaultPrompt) {
+        // 如果默认提示词不存在，重新初始化
+        this.initializeDefaultClearPrompt();
+        return `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+`;
+      }
+      
+      // 3. 返回默认提示词文本
+      logger.info('清理提示词已重置为默认值');
+      return defaultPrompt.prompt_text;
+      
+    } catch (error) {
+      logger.error('重置清理提示词失败:', error);
+      // 错误时返回硬编码默认值
+      return `**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+=== 新任务 ===
+
+`;
+    }
   }
 } 

@@ -673,4 +673,76 @@ export class PromptManager {
       );
     }
   }
+
+  // ================== 清理提示词管理方法 ==================
+
+  /**
+   * 获取清理提示词
+   */
+  getClearPrompt() {
+    try {
+      return this.database.getClearPrompt();
+    } catch (error) {
+      logger.error('获取清理提示词失败:', error);
+      throw new MCPError(
+        'Failed to get clear prompt',
+        'CLEAR_PROMPT_GET_ERROR',
+        error
+      );
+    }
+  }
+
+  /**
+   * 保存清理提示词
+   */
+  saveClearPrompt(promptText: string): void {
+    try {
+      // 验证提示词
+      const validation = this.validatePrompt(promptText);
+      if (!validation.isValid) {
+        throw new MCPError(
+          `Invalid clear prompt: ${validation.errors.join(', ')}`,
+          'CLEAR_PROMPT_VALIDATION_ERROR',
+          { errors: validation.errors }
+        );
+      }
+
+      // 保存到数据库
+      this.database.saveClearPrompt(promptText);
+      logger.info('清理提示词已保存');
+
+      // 记录警告（如果有）
+      if (validation.warnings.length > 0) {
+        logger.warn('清理提示词保存警告:', validation.warnings);
+      }
+    } catch (error) {
+      if (error instanceof MCPError) {
+        throw error;
+      }
+      logger.error('保存清理提示词失败:', error);
+      throw new MCPError(
+        'Failed to save clear prompt',
+        'CLEAR_PROMPT_SAVE_ERROR',
+        error
+      );
+    }
+  }
+
+  /**
+   * 重置清理提示词为默认值
+   */
+  resetClearPrompt(): string {
+    try {
+      const defaultPromptText = this.database.resetClearPrompt();
+      logger.info('清理提示词已重置为默认值');
+      return defaultPromptText;
+    } catch (error) {
+      logger.error('重置清理提示词失败:', error);
+      throw new MCPError(
+        'Failed to reset clear prompt',
+        'CLEAR_PROMPT_RESET_ERROR',
+        error
+      );
+    }
+  }
 } 
