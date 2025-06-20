@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ImageFile } from '../types/app'
+import type { ClearPrompt } from '../services/clearPromptService'
 
 export const useFeedbackStore = defineStore('feedback', () => {
   // 当前反馈会话ID
@@ -14,6 +15,11 @@ export const useFeedbackStore = defineStore('feedback', () => {
   
   // 工作汇报内容
   const workSummary = ref<string>('')
+  
+  // 清理提示词相关状态
+  const clearPrompt = ref<ClearPrompt | null>(null)
+  const clearPromptLoading = ref<boolean>(false)
+  const clearPromptError = ref<string>('')
   
   // 设置反馈会话ID
   const setCurrentFeedbackSession = (sessionId: string | null) => {
@@ -51,12 +57,30 @@ export const useFeedbackStore = defineStore('feedback', () => {
     selectedImages.value = []
   }
   
+  // 设置清理提示词
+  const setClearPrompt = (prompt: ClearPrompt | null) => {
+    clearPrompt.value = prompt
+  }
+  
+  // 设置清理提示词加载状态
+  const setClearPromptLoading = (loading: boolean) => {
+    clearPromptLoading.value = loading
+  }
+  
+  // 设置清理提示词错误
+  const setClearPromptError = (error: string) => {
+    clearPromptError.value = error
+  }
+  
   return {
     // 状态
     currentFeedbackSession,
     selectedImages,
     feedbackText,
     workSummary,
+    clearPrompt,
+    clearPromptLoading,
+    clearPromptError,
     
     // 方法
     setCurrentFeedbackSession,
@@ -65,6 +89,9 @@ export const useFeedbackStore = defineStore('feedback', () => {
     clearImages,
     setFeedbackText,
     setWorkSummary,
-    clearFeedbackForm
+    clearFeedbackForm,
+    setClearPrompt,
+    setClearPromptLoading,
+    setClearPromptError
   }
 })

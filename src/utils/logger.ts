@@ -58,20 +58,25 @@ class Logger {
    */
   enableFileLogging(logDir: string = 'logs'): void {
     try {
+      // 使用绝对路径确保跨平台兼容性
+      const absoluteLogDir = path.resolve(logDir);
+      
       // 确保日志目录存在
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
+      if (!fs.existsSync(absoluteLogDir)) {
+        fs.mkdirSync(absoluteLogDir, { recursive: true });
       }
 
-      // 生成日志文件名
+      // 生成Windows兼容的日志文件名（移除非法字符）
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      this.logFile = path.join(logDir, `mcp-debug-${timestamp}.log`);
+      this.logFile = path.join(absoluteLogDir, `mcp-debug-${timestamp}.log`);
       this.fileLoggingEnabled = true;
 
       // 写入日志文件头
       const header = `=== MCP Feedback Collector Debug Log ===\n` +
                     `Start Time: ${new Date().toISOString()}\n` +
                     `Log Level: ${this.currentLevel}\n` +
+                    `Platform: ${process.platform}\n` +
+                    `Node Version: ${process.version}\n` +
                     `==========================================\n\n`;
 
       fs.writeFileSync(this.logFile, header);
@@ -79,6 +84,12 @@ class Logger {
       console.log(`📁 日志文件已创建: ${this.logFile}`);
     } catch (error) {
       console.error('❌ 无法创建日志文件:', error);
+      console.error('错误详情:', {
+        platform: process.platform,
+        cwd: process.cwd(),
+        logDir,
+        error: error instanceof Error ? error.message : String(error)
+      });
       this.fileLoggingEnabled = false;
     }
   }

@@ -22,6 +22,7 @@ export interface FeedbackData {
   images?: ImageData[];
   timestamp: number;
   sessionId: string;
+  clearPreviousConversation?: boolean;
 }
 
 // 图片数据类型

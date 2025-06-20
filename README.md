@@ -1,7 +1,7 @@
 # 🎯 MCP Feedback Collector
 基于Node.js的现代化MCP反馈收集器，支持AI工作汇报和用户反馈收集。
 
-# Cursor配置说明(1.3.2版本)
+# Cursor配置说明(1.3.6版本)
 ```json
 {
   "mcpServers": {

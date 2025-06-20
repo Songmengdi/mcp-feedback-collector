@@ -13,6 +13,7 @@ import { CollectFeedbackParams, Config, FeedbackData, ImageData, MCPError, Trans
 import { ClientIdentifier } from '../utils/client-identifier.js';
 import { logger } from '../utils/logger.js';
 import { PromptManager } from '../utils/prompt-manager.js';
+import { PromptDatabase } from '../utils/prompt-database.js';
 import { WebServer } from './web-server.js';
 
 /**
@@ -24,6 +25,7 @@ export class MCPServer {
   private isRunning = false;
   private clientIdentifier: ClientIdentifier;
   private promptManager: PromptManager;
+  private promptDatabase: PromptDatabase;
   
   // HTTP传输相关
   private httpApp?: express.Application;
@@ -34,6 +36,7 @@ export class MCPServer {
     this.config = config;
     this.clientIdentifier = ClientIdentifier.getInstance();
     this.promptManager = new PromptManager();
+    this.promptDatabase = new PromptDatabase();
 
     if (webServer) {
       // 使用传入的WebServer实例（用于stdio模式的多客户端支持）
@@ -149,6 +152,65 @@ export class MCPServer {
       });
     });
 
+    // 清理提示词API接口
+    // 获取清理提示词
+    this.httpApp.get('/api/clear-prompt', (req, res) => {
+      try {
+        const clearPrompt = this.promptDatabase.getClearPrompt();
+        
+        if (!clearPrompt) {
+          res.status(404).json({ error: '未找到清理提示词' });
+          return;
+        }
+        
+        res.json({
+          success: true,
+          data: clearPrompt
+        });
+      } catch (error) {
+        logger.error('获取清理提示词失败:', error);
+        res.status(500).json({ error: '获取清理提示词失败' });
+      }
+    });
+
+    // 保存清理提示词
+    this.httpApp.post('/api/clear-prompt', (req, res) => {
+      try {
+        const promptText = req.body['promptText'];
+        
+        if (!promptText || typeof promptText !== 'string') {
+          res.status(400).json({ error: '提示词内容不能为空' });
+          return;
+        }
+        
+        this.promptDatabase.saveClearPrompt(promptText);
+        
+        res.json({
+          success: true,
+          message: '清理提示词保存成功'
+        });
+      } catch (error) {
+        logger.error('保存清理提示词失败:', error);
+        res.status(500).json({ error: '保存清理提示词失败' });
+      }
+    });
+
+    // 重置清理提示词为默认值
+    this.httpApp.delete('/api/clear-prompt', (req, res) => {
+      try {
+        const defaultPromptText = this.promptDatabase.resetClearPrompt();
+        
+        res.json({
+          success: true,
+          message: '清理提示词已重置为默认值',
+          data: { promptText: defaultPromptText }
+        });
+      } catch (error) {
+        logger.error('重置清理提示词失败:', error);
+        res.status(500).json({ error: '重置清理提示词失败' });
+      }
+    });
+
     // 启动HTTP服务器
     return new Promise((resolve, reject) => {
       this.httpServer = this.httpApp!.listen(this.config.mcpPort, () => {
@@ -250,10 +312,6 @@ export class MCPServer {
     await transport.handleRequest(req, res);
   }
 
-
-
-
-
   /**
    * 实现collect_feedback功能
    */
@@ -314,6 +372,35 @@ export class MCPServer {
 
     const content: (TextContent | ImageContent)[] = [];
 
+    // 检查是否需要添加清理提示词
+    const hasClearRequest = feedback.some(item => item.clearPreviousConversation === true);
+    
+    if (hasClearRequest) {
+      try {
+        // 从数据库获取清理提示词
+        const clearPrompt = this.promptDatabase.getClearPrompt();
+        const promptText = clearPrompt?.prompt_text;
+        
+        // 在首位添加清理提示词
+        content.push({
+          type: 'text',
+          text: `# 清理上下文
+${promptText}
+---
+`
+        });
+      } catch (error) {
+        logger.error('获取清理提示词失败，使用默认提示词:', error);
+        // 出错时使用默认提示词
+        content.push({
+          type: 'text',
+          text: `# 清理上下文
+**(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
+---
+`
+        });
+      }
+    }
 
     feedback.forEach((item, index) => {
 
