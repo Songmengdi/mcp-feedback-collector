@@ -56,3 +56,6 @@ claude-desktop-config*.json
 
 # TypeScript SDK (external dependency)
 typescript-sdk-main/
+
+# 数据文件备份
+*.backup

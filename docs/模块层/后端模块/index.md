@@ -53,7 +53,7 @@ graph TB
 ### 主应用服务器
 - **MCP协议支持**: 完整的MCP服务器实现
 - **Web服务**: Express.js + Socket.IO
-- **数据存储**: SQLite + Better-SQLite3
+- **数据存储**: JSON存储引擎 (零native依赖)
 - **实时通信**: WebSocket双向通信
 - **文件处理**: 多媒体文件上传和处理
 

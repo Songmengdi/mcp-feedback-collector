@@ -1,5 +1,5 @@
 /**
- * 提示词服务 - 封装与后端API的通信，实现SQLite+localStorage缓存策略
+ * 提示词服务 - 封装与后端API的通信，实现JSON存储+localStorage缓存策略
  */
 
 import type { 

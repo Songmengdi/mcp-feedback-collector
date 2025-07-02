@@ -49,7 +49,7 @@ MCP Feedback Collector 是一个基于 Model Context Protocol (MCP) 的现代化
 - SQLite数据库存储
 - 性能监控
 
-**技术栈**: Node.js + TypeScript + Vue.js 3 + Socket.IO + Express + Pinia + SQLite + Better-SQLite3
+**技术栈**: Node.js + TypeScript + Vue.js 3 + Socket.IO + Express + Pinia + JSON存储
 
 ## 🆕 最新功能亮点
 

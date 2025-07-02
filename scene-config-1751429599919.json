@@ -1,0 +1,122 @@
+{
+  "version": "2.0",
+  "exportedAt": 1751429599912,
+  "scenes": [
+    {
+      "id": "coding",
+      "name": "编码场景",
+      "description": "专门用于编程开发和代码相关工作的场景，包含探讨、编辑和搜索三种核心模式",
+      "icon": "💻",
+      "isDefault": 1,
+      "sortOrder": 0,
+      "createdAt": 1750239270283,
+      "updatedAt": 1750239277097
+    }
+  ],
+  "modes": [
+    {
+      "id": "mode_1750303481576_1u68u7etj",
+      "sceneId": "coding",
+      "name": "通用反馈",
+      "description": "不加入任何内容的继续讨论(不能进行编码)",
+      "shortcut": "1",
+      "isDefault": 0,
+      "sortOrder": 0,
+      "defaultFeedback": null,
+      "createdAt": 1750303481577,
+      "updatedAt": 1751197249512
+    },
+    {
+      "id": "mode_1750919642068_2r5ftbjqj",
+      "sceneId": "coding",
+      "name": "TO_DO_LIST",
+      "description": "简单性的方案制定",
+      "shortcut": "2",
+      "isDefault": 0,
+      "sortOrder": 1,
+      "defaultFeedback": "根据讨论结果,以及你的新发现,开始指定方案",
+      "createdAt": 1750919642068,
+      "updatedAt": 1751197249512
+    },
+    {
+      "id": "edit",
+      "sceneId": "coding",
+      "name": "EDITING",
+      "description": "代码修改和优化，编写具体的代码实现",
+      "shortcut": "3",
+      "isDefault": 0,
+      "sortOrder": 2,
+      "defaultFeedback": "根据实施计划,完成编码",
+      "createdAt": 1750239270286,
+      "updatedAt": 1751197249513
+    },
+    {
+      "id": "mode_1750738352748_unna8h3mh",
+      "sceneId": "coding",
+      "name": "交互模式",
+      "description": "让Serena切换到交互模式",
+      "shortcut": "4",
+      "isDefault": 0,
+      "sortOrder": 3,
+      "defaultFeedback": null,
+      "createdAt": 1750738352748,
+      "updatedAt": 1751197249512
+    },
+    {
+      "id": "mode_1750294234725_zsiu9pg0n",
+      "sceneId": "coding",
+      "name": "业务分析",
+      "description": "和用户进行问题的讨论,展示清晰地框架",
+      "shortcut": "5",
+      "isDefault": 0,
+      "sortOrder": 4,
+      "defaultFeedback": null,
+      "createdAt": 1750294234725,
+      "updatedAt": 1751429566543
+    },
+    {
+      "id": "mode_1751429552308_6ffmdq5dk",
+      "sceneId": "coding",
+      "name": "更新规则",
+      "description": "规则更新",
+      "shortcut": "6",
+      "isDefault": 0,
+      "sortOrder": 5,
+      "defaultFeedback": " ",
+      "createdAt": 1751429552309,
+      "updatedAt": 1751429566547
+    }
+  ],
+  "prompts": [
+    {
+      "sceneId": "coding",
+      "modeId": "edit",
+      "prompt": "注意: 以下要求,仅在本次反馈之后有效,之后请另遵循用户指令\n---\n成功激活的模式：editing（代码编写）\n\n# 任务\n接下来你的任务是根据用户反馈, 深入分析代码, 并编写具体的代码\n\n# 用户反馈:\n{{ feedback }}\n\n# 代码编写步骤\nstep1. 查看`.cursor/rules/when_rule_use.mdc`,根据优先级以及你当前的编码场景,选择`.cursor/rules`下合适的多个规则;\n\nstep2. 对你未阅读的规则文档,进行阅读\n\nstep3. 根据用户反馈和当前方案, 确认具体的编码思路\n\nstep4. 完成代码编写,不做额外无关的个工作, 先完成全部的编码任务,这个过程中不进行错误修正\n\nstep5. 检查存在错误,统一修正\n\n# 编码准则\n- 尽可能的使用少量代码变更完成代码修改, 对于与修改无关的代码,禁止随机改动;\n- 当某个具体业务代码无法立即完成时 `// TODO` 进行注释说明;\n\n\n# 禁止事项\n- 禁止提供额外的说明文档,测试文档,总结文档\n- 禁止编写未完成的代码,或需要用户额外补充的代码"
+    },
+    {
+      "sceneId": "coding",
+      "modeId": "mode_1750294234725_zsiu9pg0n",
+      "prompt": "成功激活的模式：analysis（分析模式）\n\n# 任务\n你的任务是深入分析用户指定的业务逻辑部分，通过可视化图形帮助用户理解复杂的业务流程和代码结构。\n\n# 用户反馈:\n{{ feedback }}\n\n# 核心目标\n- 针对用户不理解的业务逻辑部分进行深度剖析\n- 以图形化方式呈现业务流程、数据流向、模块关系\n- 最小化自然语言描述，最大化图形表达效果\n- 文档应聚焦于业务性质内容：如业务架构、流程、数据流转等非单一文件可说明的信息\n\n# 分析流程\n\n## 1. 业务逻辑识别阶段\n- 快速定位用户关注的业务模块\n- 识别相关的核心文件和方法\n- 梳理业务流程的起点和终点\n\n## 2. 深度代码分析阶段\n- 详细查看相关代码文件的具体实现\n- 追踪数据流和控制流\n- 识别关键的业务规则和逻辑分支\n- 使用 Markdown 链接（`[文件名](路径#L行号)`）引用具体代码位置，便于追溯\n\n\n# 可视化表达规范\n\n### 图表类型建议\n根据业务特点选择最合适的 mermaid 图表类型：\n- `graph TD`：用于表示流程图（推荐）\n- `sequenceDiagram`：用于展示调用顺序\n- `classDiagram`：用于展示类/模块关系\n- `stateDiagram`：用于状态转换过程\n- `pie`：用于占比分析（可选）\n\n### 图形表达要求\n- 确保 mermaid 语法正确，可直接渲染\n- 节点名称简洁明了，不包含文件路径\n- 连接关系清晰，标注必要的说明\n- 复杂流程适当分解为多个子图\n- 所有图表需配合表格提供详细的可追溯信息（如节点对应代码位置）\n\n# 分析维度标准\n\n## 必须分析的维度\n1. **数据流向**: 输入→处理→输出的完整链路  \n2. **控制流程**: 条件判断、循环、异常处理  \n3. **模块依赖**: 调用关系、依赖层次  \n4. **业务规则**: 验证逻辑、业务约束  \n5. **状态变化**: 数据状态的转换过程  \n\n## 分析输出要求\n- 图形与表格相互对应，确保完整的可追溯性  \n- 每个流程节点都能在表格中找到对应的代码位置  \n- 复杂逻辑分层展示，提供从概览到细节的视图  \n- 重点突出关键的业务逻辑和决策点  \n\n# 问题与存疑点 (如果存在才给出)\n...\n\n# 禁止事项\n- **禁止使用工具修改代码**\n- 禁止在 mermaid 图形中包含文件路径等冗长信息\n- 禁止使用无法渲染的 mermaid 语法\n- 禁止遗漏关键的业务逻辑分支"
+    },
+    {
+      "sceneId": "coding",
+      "modeId": "mode_1750303481576_1u68u7etj",
+      "prompt": "**继续遵循当前激活的模式**\n\n{{ feedback }}"
+    },
+    {
+      "sceneId": "coding",
+      "modeId": "mode_1750738352748_unna8h3mh",
+      "prompt": "成功激活的模式：interactive（交互式）\n\n# 任务\n你的任务是根据用户反馈,细化你的任务计划, 或者帮助用户解释清楚原理,代码等任何用户有疑问的内容\n\n# 用户反馈\n{{ feedback }}\n\n# 反馈指南\n- 你应该在整个任务过程中与用户进行互动,禁止做出编码动作\n- 当用户要求计划变更时,查找相关信息,确认可行性; 你可以使用`list_dir`查看`.memory`目录下的记忆信息, 查看项目代码等加深代码理解;\n   - 当计划确认后,使用编码工具进行`.plan/current`文件夹下当前计划的变更(不是创建新任务)\n- 当用户对业务不清晰, 代码不清晰等任何有疑问的内容时\n   - 使用markdown table, mermaid图等为用户澄清事实,提出建议\n\n# 禁止事项\n- 禁止调用工具修改用户的代码\n- 禁止提供具体的代码编写内容"
+    },
+    {
+      "sceneId": "coding",
+      "modeId": "mode_1750919642068_2r5ftbjqj",
+      "prompt": "注意: 以下要求,仅在本次反馈之后有效,之后请另遵循用户指令\n---\n成功激活的模式：plan_to_do（检查与规划模式)\n\n# 用户反馈\n{{ feedback }}\n\n# 任务\n接下来你的任务是根据用户提供的反馈, 检查代码并给出具体的TO_DO_LIST\n\n# 具体细则\n- 该阶段禁止编码,你的核心任务为**任务规划**\n- 你仅拥有 \n - 1. 项目代码检索与阅读\n - 2. 给出TO_DO_LIST\n - 3. 使用MCP服务(非`making_code_changes`形式)\n\n## 步骤\n### 1. 思路步骤分析\n- 深度探究代码, 思考解决方案\n- 查看`.memory/model_link.md`,阅读相关记忆,帮你快速确定业务位置\n- 查看`.cursor/rules/when_rule_use.mdc`,根据优先级以及你当前的编码场景,选择`.cursor/rules`下合适的多个规则进行阅读\n\n### 2. 是否有关于任何需求的疑问(如果有的话)\n- 如遇到疑问,用户需求不清晰时,停止给出TO_DO_LIST, 需要确认的信息等,务必第一时间通过`collect_feedback`工具,询问用户的意见\n \n### 3. 具体实施步骤\n- [ ]  步骤1需要完成的内容\n  - 需要具体做什么?\n  - 需要具体做什么?\n- [ ] 步骤2需要完成的内容\n  - 需要具体做什么?\n  - 需要具体做什么?\n...\n### 4. 询问用户TO_DO_LIST是否正确\n给出实施步骤后,务必第一时间通过`collect_feedback`工具,询问用户的意见, 确认TO_DO_LIST是否合适,确认是否进行下一步编码\n\n# 禁止事项\n- 给出的TO_DO是关于如果一步一步变更代码的步骤,不要包含测试验证等额外的步骤\n- 禁止调用工具修改用户的代码\n- 禁止提供具体的代码编写内容\n- 禁止给出空洞宽泛的建议\n- 禁止给出需要长时间才能完成的建议"
+    },
+    {
+      "sceneId": "coding",
+      "modeId": "mode_1751429552308_6ffmdq5dk",
+      "prompt": "成功激活的模式：rule_update（规则更新模式）\n\n# 任务\n你的任务是深入分析之前你完成的任务,针对`.cursor/rules`下的规则进行更新\n\n## 用户额外反馈\n{{ feedback }}\n\n## 实施细节\n1. 阅读`.cursor/rules/self_improve.mdc`规则文件, 查看其中的详细更新规范\n2. 按照规范要求, 查看现有规则(不要直接进行规则变更)\n3. 为用户列出你认为需要进行规则改进的, 并第一时间通过`collect_feedback`工具,询问用户的意见\n4. 得到用户与许可后,遵从用户的意见,进行规则的更新变动\n5. 在所有规则创建或变更后, 查看`.template/rule_use/when_rule_use_example.md`模板, 并根据之前添加/更新的规则, 更新迭代我们的规则使用文件`.cursor/rules/when_rule_use.mdc`"
+    }
+  ]
+}
