@@ -54,9 +54,17 @@
 
     <!-- 场景列表 -->
     <div v-else class="scene-list-container">
-      <div class="scene-grid">
+      <VueDraggable
+        v-model="sortedScenes"
+        class="scene-grid"
+        :animation="200"
+        ghostClass="scene-ghost"
+        chosenClass="scene-chosen"
+        :disabled="saving"
+        @end="handleSceneReorder"
+      >
         <div 
-          v-for="scene in scenes" 
+          v-for="scene in sortedScenes" 
           :key="scene.id"
           class="scene-card"
           :class="{ 
@@ -65,6 +73,9 @@
           }"
           @click="selectSceneSelection(scene)"
         >
+          <!-- 拖拽句柄 -->
+          <div class="drag-handle" title="拖拽排序">⋮⋮</div>
+          
           <!-- 场景卡片头部 -->
           <div class="scene-card-header">
             <div class="scene-info">
@@ -159,7 +170,7 @@
             </button>
           </div>
         </div>
-      </div>
+      </VueDraggable>
     </div>
 
     <!-- 侧边栏遮罩层 -->
@@ -447,20 +458,21 @@
     
     <!-- 提示词编辑器 -->
     <PromptEditor ref="promptEditorRef" />
+
+    <!-- 状态消息组件 -->
+    <StatusMessage ref="localStatusMessageRef" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, nextTick, inject } from 'vue'
+import { computed, ref, onMounted, nextTick } from 'vue'
 import { useScenesStore } from '../stores/scenes'
 import { useAppStore } from '../stores/app'
 import type { Scene, SceneMode, SceneRequest, SceneModeRequest, SceneConfigExport } from '../types/app'
 import { promptService } from '../services/promptService'
 import PromptEditor from './PromptEditor.vue'
 import { VueDraggable } from 'vue-draggable-plus'
-
-// 获取全局消息显示方法
-const showStatusMessage = inject<(type: 'success' | 'error' | 'warning' | 'info', message: string, autoRemove?: boolean) => void>('showStatusMessage')
+import StatusMessage from './StatusMessage.vue'
 import { 
   EyeIcon,
   PencilIcon,
@@ -532,6 +544,9 @@ const importPreview = ref<SceneConfigExport | null>(null)
 // 提示词编辑器相关
 const promptEditorRef = ref<InstanceType<typeof PromptEditor>>()
 
+// 状态消息组件相关
+const localStatusMessageRef = ref<InstanceType<typeof StatusMessage>>()
+
 // 拖拽相关 - 为拖拽组件提供的响应式数据
 const currentModesList = computed({
   get: () => {
@@ -545,6 +560,17 @@ const currentModesList = computed({
       newMap.set(managementSelectedScene.value.id, newList)
       sceneModeData.value = newMap
     }
+  }
+})
+
+// 场景排序 - 为场景拖拽组件提供的响应式数据
+const sortedScenes = computed({
+  get: () => {
+    return [...scenes.value].sort((a, b) => a.sortOrder - b.sortOrder)
+  },
+  set: (newList: Scene[]) => {
+    // vue-draggable-plus会自动更新这个值，我们在@end事件中处理业务逻辑
+    scenes.value.splice(0, scenes.value.length, ...newList)
   }
 })
 
@@ -682,11 +708,14 @@ const saveScene = async () => {
   if (!sceneForm.value.name.trim()) return
   
   saving.value = true
+  
   try {
     if (editingScene.value) {
       await scenesStore.updateScene(editingScene.value.id, sceneForm.value)
+      localStatusMessageRef.value?.showMessage('success', `场景"${sceneForm.value.name}"已更新`)
     } else {
       const newScene = await scenesStore.createScene(sceneForm.value)
+      localStatusMessageRef.value?.showMessage('success', `场景"${sceneForm.value.name}"已创建`)
       // 为新场景初始化空的模式数据
       const newMap = new Map(sceneModeData.value)
       newMap.set(newScene.id, [])
@@ -694,7 +723,8 @@ const saveScene = async () => {
     }
     closeSceneDialog()
   } catch (error) {
-    // 错误已通过全局错误处理器显示
+    const operation = editingScene.value ? '更新' : '创建'
+    localStatusMessageRef.value?.showMessage('error', `${operation}场景失败，请重试`)
   } finally {
     saving.value = false
   }
@@ -829,6 +859,7 @@ const saveMode = async () => {
   }
   
   saving.value = true
+  
   try {
     const sceneId = editingModeScene.value.id
     
@@ -840,6 +871,7 @@ const saveMode = async () => {
         editingMode.value.id, 
         modeForm.value
       )
+      localStatusMessageRef.value?.showMessage('success', `模式"${modeForm.value.name}"已更新`)
       
       // 如果更新了默认状态，需要同步表单数据以保持UI一致性
       if (modeForm.value.isDefault !== undefined) {
@@ -850,6 +882,7 @@ const saveMode = async () => {
       // 创建新模式 - 传递完整的modeForm数据，包括isDefault字段
       console.log(`[SceneManagement] 新建模式，传递完整数据（包含isDefault: ${modeForm.value.isDefault}）`)
       await scenesStore.addSceneMode(sceneId, modeForm.value)
+      localStatusMessageRef.value?.showMessage('success', `模式"${modeForm.value.name}"已创建`)
     }
     
     closeModeDialog()
@@ -859,7 +892,8 @@ const saveMode = async () => {
     console.log(`[SceneManagement] saveMode 编辑场景完成`)
   } catch (error) {
     console.error('[SceneManagement] saveMode 编辑场景失败:', error)
-    // 错误已通过全局错误处理器显示
+    const operation = editingMode.value ? '更新' : '创建'
+    localStatusMessageRef.value?.showMessage('error', `${operation}模式失败，请重试`)
   } finally {
     saving.value = false
   }
@@ -947,7 +981,7 @@ const exportConfig = async () => {
     
     // 显示成功消息
     const totalItems = config.scenes.length + config.modes.length + config.prompts.length
-    showStatusMessage?.('success', `场景配置导出成功！共导出 ${totalItems} 项数据`)
+    localStatusMessageRef.value?.showMessage('success', `场景配置导出成功！共导出 ${totalItems} 项数据`)
     
     console.log('[SceneManagement] 场景配置导出完成')
   } catch (error) {
@@ -977,13 +1011,13 @@ const handleFileSelect = (event: Event) => {
   
   // 验证文件类型
   if (!file.name.endsWith('.json')) {
-    showStatusMessage?.('error', '请选择JSON格式的配置文件')
+    localStatusMessageRef.value?.showMessage('error', '请选择JSON格式的配置文件')
     return
   }
   
   // 验证文件大小（限制为5MB）
   if (file.size > 5 * 1024 * 1024) {
-    showStatusMessage?.('error', '配置文件过大，请选择小于5MB的文件')
+    localStatusMessageRef.value?.showMessage('error', '配置文件过大，请选择小于5MB的文件')
     return
   }
   
@@ -1030,7 +1064,7 @@ const handleFileSelect = (event: Event) => {
       }
       
       if (validationErrors.length > 0) {
-        showStatusMessage?.('error', `配置文件验证失败: ${validationErrors.join(', ')}`)
+        localStatusMessageRef.value?.showMessage('error', `配置文件验证失败: ${validationErrors.join(', ')}`)
         return
       }
       
@@ -1046,12 +1080,12 @@ const handleFileSelect = (event: Event) => {
       console.log('[SceneManagement] 配置文件验证通过，预览数据已设置')
     } catch (error) {
       console.error('[SceneManagement] 解析配置文件失败:', error)
-      showStatusMessage?.('error', '配置文件格式错误，请检查JSON语法')
+      localStatusMessageRef.value?.showMessage('error', '配置文件格式错误，请检查JSON语法')
     }
   }
   
   reader.onerror = () => {
-    showStatusMessage?.('error', '读取文件失败，请重试')
+    localStatusMessageRef.value?.showMessage('error', '读取文件失败，请重试')
   }
   
   reader.readAsText(file)
@@ -1061,6 +1095,7 @@ const importConfig = async () => {
   if (!importPreview.value) return
   
   importing.value = true
+  
   try {
     await promptService.importSceneConfig(importPreview.value)
     
@@ -1073,7 +1108,7 @@ const importConfig = async () => {
     
     // 显示成功消息
     const totalItems = importPreview.value.scenes.length + importPreview.value.modes.length + importPreview.value.prompts.length
-    showStatusMessage?.('success', `场景配置导入成功！共导入 ${totalItems} 项数据`)
+    localStatusMessageRef.value?.showMessage('success', `场景配置导入成功！共导入 ${totalItems} 项数据`)
     
     closeImportDialog()
     
@@ -1082,7 +1117,7 @@ const importConfig = async () => {
     console.error('[SceneManagement] 导入场景配置失败:', error)
     // 显示详细的错误信息
     const errorMessage = error instanceof Error ? error.message : '未知错误'
-    showStatusMessage?.('error', `导入失败: ${errorMessage}`)
+    localStatusMessageRef.value?.showMessage('error', `导入失败: ${errorMessage}`)
   } finally {
     importing.value = false
   }
@@ -1110,11 +1145,12 @@ const handlePromptSave = async (event: Event) => {
   
   try {
     await promptService.saveUnifiedPrompt({ sceneId, modeId }, prompt)
+    localStatusMessageRef.value?.showMessage('success', '提示词已保存')
     
     // 触发保存完成事件
     window.dispatchEvent(new CustomEvent('promptSaveComplete'))
   } catch (error) {
-    // 错误已通过全局错误处理器显示
+    localStatusMessageRef.value?.showMessage('error', '保存提示词失败，请重试')
     throw error
   }
 }
@@ -1175,11 +1211,11 @@ const handleModeReorder = async (event: any) => {
       newMap.set(sceneId, latestModes)
       sceneModeData.value = newMap
       
-      showStatusMessage?.('success', '模式排序已更新')
+      localStatusMessageRef.value?.showMessage('success', '模式排序已更新')
     }
   } catch (error) {
     console.error('拖拽排序失败:', error)
-    showStatusMessage?.('error', '排序更新失败，请重试')
+    localStatusMessageRef.value?.showMessage('error', '排序更新失败，请重试')
     
     // 错误时重新加载数据恢复状态
     if (managementSelectedScene.value) {
@@ -1188,6 +1224,88 @@ const handleModeReorder = async (event: any) => {
   } finally {
     saving.value = false
   }
+}
+
+// 场景拖拽排序完成处理
+const handleSceneReorder = async (event: any) => {
+  const { oldIndex, newIndex } = event
+  if (oldIndex === newIndex) return
+  
+  saving.value = true
+  try {
+    const newOrderedScenes = sortedScenes.value
+    
+    // 重新分配sortOrder
+    const updates = reassignSceneOrder(newOrderedScenes)
+    
+    if (updates.length > 0) {
+      // 批量更新场景排序
+      await batchUpdateScenes(newOrderedScenes, updates)
+      
+      localStatusMessageRef.value?.showMessage('success', '场景排序已更新')
+    }
+  } catch (error) {
+    console.error('场景拖拽排序失败:', error)
+    localStatusMessageRef.value?.showMessage('error', '排序更新失败，请重试')
+    
+    // 错误时重新加载数据恢复状态
+    await scenesStore.loadScenes()
+  } finally {
+    saving.value = false
+  }
+}
+
+// 重新分配场景排序
+const reassignSceneOrder = (scenes: Scene[]) => {
+  const updates: Array<{
+    sceneId: string
+    sortOrder: number
+  }> = []
+  
+  scenes.forEach((scene, index) => {
+    const newSortOrder = index
+    
+    // 只有当排序发生变化时才更新
+    if (scene.sortOrder !== newSortOrder) {
+      updates.push({
+        sceneId: scene.id,
+        sortOrder: newSortOrder
+      })
+    }
+  })
+  
+  return updates
+}
+
+// 批量更新场景排序
+const batchUpdateScenes = async (
+  scenes: Scene[],
+  updates: Array<{
+    sceneId: string
+    sortOrder: number
+  }>
+): Promise<void> => {
+  console.log(`[batchUpdateScenes] 开始场景排序更新，更新数量: ${updates.length}`)
+  
+  // 使用并行单个更新
+  const updatePromises = updates.map(update => {
+    const currentScene = scenes.find(s => s.id === update.sceneId)
+    if (!currentScene) {
+      throw new Error(`找不到场景: ${update.sceneId}`)
+    }
+    
+    console.log(`[batchUpdateScenes] 更新场景排序 ${currentScene.name}:`, {
+      sceneId: update.sceneId,
+      sortOrder: update.sortOrder
+    })
+    
+    return scenesStore.updateScene(update.sceneId, {
+      sortOrder: update.sortOrder
+    })
+  })
+  
+  await Promise.all(updatePromises)
+  console.log('[batchUpdateScenes] 场景排序更新完成')
 }
 
 // 重新分配快捷键和排序
@@ -1558,6 +1676,33 @@ const preloadVisibleSceneModes = async () => {
   padding: 16px;
   transition: all 0.2s ease;
   position: relative;
+}
+
+.scene-card .drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  cursor: grab;
+  color: #666666;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+
+.scene-card:hover .drag-handle {
+  opacity: 1;
+}
+
+.scene-card .drag-handle:hover {
+  color: #007acc;
+  background: rgba(0, 122, 204, 0.1);
+}
+
+.scene-card .drag-handle:active {
+  cursor: grabbing;
 }
 
 .scene-card:hover {
@@ -1948,6 +2093,21 @@ const preloadVisibleSceneModes = async () => {
   background: #1e2a3a;
   border-color: #007acc;
   transform: scale(0.98);
+}
+
+/* 场景拖拽样式 */
+.scene-ghost {
+  opacity: 0.5;
+  background: #2d2d30;
+  border: 2px dashed #007acc;
+  transform: scale(0.98);
+}
+
+.scene-chosen {
+  background: #1e2a3a;
+  border-color: #007acc;
+  transform: scale(0.98);
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
 }
 
 .mode-info {

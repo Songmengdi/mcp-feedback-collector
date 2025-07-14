@@ -163,14 +163,9 @@ export class ServerCoordinator {
   }> {
     logger.info('[Coordinator] 🔍 发现服务...');
     
-    const [toolbarServices, portConfig] = await Promise.all([
-      this.portManager.detectToolbarServices(),
-      Promise.resolve(this.portManager.getToolbarPortConfig())
-    ]);
-
     return {
-      toolbarServices,
-      portConfig
+      toolbarServices: [],
+      portConfig: {}
     };
   }
 

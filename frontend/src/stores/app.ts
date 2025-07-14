@@ -58,6 +58,8 @@ export const useAppStore = defineStore('app', () => {
     timestamp: number;
   } | null>(null)
   
+
+  
   // ===== 基础方法 =====
   
   // 切换标签页
@@ -112,6 +114,8 @@ export const useAppStore = defineStore('app', () => {
     setAutoRefreshCountdown,
     setLastWorkSummary,
     setReceivedPrompt,
-    clearReceivedPrompt
+    clearReceivedPrompt,
+    
+
   }
 })

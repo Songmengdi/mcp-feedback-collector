@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toolbar Monitor - 工具栏监控台</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🔧 Toolbar Monitor</h1>
+            <p class="subtitle">独立工具栏服务监控台</p>
+        </header>
+
+        <main class="main">
+            <!-- 消息显示区域 -->
+            <section class="messages-section">
+                <h2>📝 Prompt消息监控</h2>
+                <div class="messages-container">
+                    <div class="messages-header">
+                        <span>实时Prompt消息</span>
+                        <span class="message-count">共 <span id="message-count">0</span> 条</span>
+                    </div>
+                    <div class="messages-list" id="messages-list">
+                        <div class="no-messages">暂无消息</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 状态监控区域 -->
+            <section class="status-section">
+                <h2>📊 服务状态</h2>
+                <div class="status-grid">
+                    <div class="status-card">
+                        <div class="status-indicator" id="connection-status"></div>
+                        <span>连接状态</span>
+                        <span id="connection-text">未连接</span>
+                    </div>
+                    <div class="status-card">
+                        <span>端口</span>
+                        <span id="port-info">5748/15749</span>
+                    </div>
+                    <div class="status-card">
+                        <span>连接数</span>
+                        <span id="client-count">-</span>
+                    </div>
+                    <div class="status-card">
+                        <span>运行时间</span>
+                        <span id="uptime">-</span>
+                    </div>
+                    <div class="status-card">
+                        <span>最新消息</span>
+                        <span id="latest-time">-</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 连接控制区域 -->
+            <section class="control-section">
+                <h2>🔗 连接控制</h2>
+                <div class="control-buttons">
+                    <button id="connect-btn" class="btn btn-primary">连接</button>
+                    <button id="disconnect-btn" class="btn btn-secondary" disabled>断开</button>
+                    <button id="clear-btn" class="btn btn-warning">清除历史</button>
+                    <button id="export-btn" class="btn btn-info">导出数据</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Standalone Toolbar Service v1.0.0</p>
+        </footer>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html> 

@@ -37,13 +37,7 @@ export class WebServer {
   private promptManager: PromptManager;
   private socketMcpMapping = new Map<string, string>(); // socketId -> mcpSessionId
 
-  // WebSocket客户端连接到toolbar广播服务
-  private toolbarWsClient: WebSocket | null = null;
-  private toolbarWsUrl = 'ws://localhost:15749/broadcast';
-  private toolbarReconnectInterval: NodeJS.Timeout | null = null;
-  private toolbarReconnectAttempts = 0;
-  private maxToolbarReconnectAttempts = 10;
-  private toolbarReconnectDelay = 3000; // 3秒
+
 
   constructor(config: Config, preAllocatedPort?: number) {
     this.config = config;
@@ -356,6 +350,13 @@ export class WebServer {
     // 获取所有场景
     this.app.get('/api/scenes', (req, res) => {
       try {
+        // 清理缓存以确保获取最新数据（多实例同步）
+        try {
+          this.promptManager.clearCaches();
+        } catch (error) {
+          logger.warn('清理缓存失败，继续执行:', error);
+        }
+
         const scenes = this.promptManager.getAllScenes();
         const convertedScenes = scenes.map(scene => this.convertSceneToFrontendFormat(scene));
         
@@ -1716,136 +1717,7 @@ export class WebServer {
   /**
    * 连接到toolbar广播服务的WebSocket客户端
    */
-  private connectToToolbarBroadcast(): void {
-    if (this.toolbarWsClient) {
-      logger.debug('[WebServer] 关闭现有的toolbar WebSocket连接');
-      this.toolbarWsClient.close();
-      this.toolbarWsClient = null;
-    }
 
-    logger.info(`[WebServer] 尝试连接到toolbar广播服务: ${this.toolbarWsUrl}`);
-
-    try {
-      this.toolbarWsClient = new WebSocket(this.toolbarWsUrl);
-
-      this.toolbarWsClient.on('open', () => {
-        logger.info('[WebServer] ✅ 成功连接到toolbar广播服务');
-        this.toolbarReconnectAttempts = 0;
-        
-        // 清除重连定时器
-        if (this.toolbarReconnectInterval) {
-          clearTimeout(this.toolbarReconnectInterval);
-          this.toolbarReconnectInterval = null;
-        }
-      });
-
-      this.toolbarWsClient.on('message', (data: Buffer) => {
-        try {
-          const message = JSON.parse(data.toString());
-          this.handleToolbarBroadcastMessage(message);
-        } catch (error) {
-          logger.error('[WebServer] 解析toolbar广播消息失败:', error);
-        }
-      });
-
-      this.toolbarWsClient.on('close', (code: number, reason: Buffer) => {
-        logger.warn(`[WebServer] toolbar WebSocket连接关闭: code=${code}, reason=${reason.toString()}`);
-        this.toolbarWsClient = null;
-        this.scheduleToolbarReconnect();
-      });
-
-      this.toolbarWsClient.on('error', (error: Error) => {
-        logger.warn('[WebServer] toolbar WebSocket连接错误:', error);
-        if (this.toolbarWsClient) {
-          this.toolbarWsClient.close();
-          this.toolbarWsClient = null;
-        }
-        this.scheduleToolbarReconnect();
-      });
-
-    } catch (error) {
-      logger.warn('[WebServer] 创建toolbar WebSocket连接失败:', error);
-      this.scheduleToolbarReconnect();
-    }
-  }
-
-  /**
-   * 处理从toolbar广播服务接收到的消息
-   */
-  private handleToolbarBroadcastMessage(message: any): void {
-    try {
-      logger.debug('[WebServer] 收到toolbar广播消息:', message);
-
-      if (message.event === 'prompt_received' && message.data) {
-        // 转发prompt到前端Socket.IO客户端
-        this.io.emit('prompt_received', {
-          sessionId: message.data.sessionId,
-          prompt: message.data.prompt,
-          model: message.data.model,
-          files: message.data.files,
-          images: message.data.images,
-          mode: message.data.mode,
-          metadata: message.data.metadata,
-          timestamp: message.data.timestamp || Date.now()
-        });
-
-        logger.info(`[WebServer] 已转发toolbar prompt到前端客户端 - 会话: ${message.data.sessionId}`);
-      } else {
-        logger.debug('[WebServer] 忽略未知的toolbar广播消息类型:', message.event);
-      }
-
-    } catch (error) {
-      logger.error('[WebServer] 处理toolbar广播消息失败:', error);
-    }
-  }
-
-  /**
-   * 安排toolbar WebSocket重连
-   */
-  private scheduleToolbarReconnect(): void {
-    // 如果已经有重连定时器，先清除
-    if (this.toolbarReconnectInterval) {
-      clearTimeout(this.toolbarReconnectInterval);
-      this.toolbarReconnectInterval = null;
-    }
-
-    // 检查重连次数限制
-    if (this.toolbarReconnectAttempts >= this.maxToolbarReconnectAttempts) {
-      logger.warn(`[WebServer] toolbar WebSocket重连次数达到上限 (${this.maxToolbarReconnectAttempts})，停止重连`);
-      return;
-    }
-
-    this.toolbarReconnectAttempts++;
-    const delay = this.toolbarReconnectDelay * Math.pow(1.5, this.toolbarReconnectAttempts - 1); // 指数退避
-
-    logger.info(`[WebServer] 将在 ${delay}ms 后尝试第 ${this.toolbarReconnectAttempts} 次重连toolbar广播服务`);
-
-    this.toolbarReconnectInterval = setTimeout(() => {
-      this.toolbarReconnectInterval = null;
-      this.connectToToolbarBroadcast();
-    }, delay);
-  }
-
-  /**
-   * 断开toolbar WebSocket连接
-   */
-  private disconnectFromToolbarBroadcast(): void {
-    // 清除重连定时器
-    if (this.toolbarReconnectInterval) {
-      clearTimeout(this.toolbarReconnectInterval);
-      this.toolbarReconnectInterval = null;
-    }
-
-    // 关闭WebSocket连接
-    if (this.toolbarWsClient) {
-      logger.info('[WebServer] 断开toolbar WebSocket连接');
-      this.toolbarWsClient.close();
-      this.toolbarWsClient = null;
-    }
-
-    // 重置重连计数
-    this.toolbarReconnectAttempts = 0;
-  }
 
   /**
    * 清理MCP会话相关资源
@@ -2096,9 +1968,14 @@ export class WebServer {
       this.isServerRunning = true;
       logger.info(`✅ Web服务器启动成功: http://localhost:${this.port}`);
 
-      // 启动后连接到toolbar广播服务
-      logger.info('[WebServer] 初始化toolbar广播服务连接...');
-      this.connectToToolbarBroadcast();
+      // 清理缓存以确保获取最新数据（多实例同步）
+      try {
+        this.promptManager.clearCaches();
+      } catch (error) {
+        logger.warn('清理缓存失败，继续执行:', error);
+      }
+
+
 
     } catch (error) {
       logger.error('Web服务器启动失败:', error);
@@ -2129,8 +2006,7 @@ export class WebServer {
       // 关闭提示词管理器
       this.promptManager.close();
 
-      // 断开toolbar WebSocket连接
-      this.disconnectFromToolbarBroadcast();
+
 
       // 关闭所有WebSocket连接
       this.io.disconnectSockets(true);

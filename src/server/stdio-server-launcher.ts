@@ -61,7 +61,7 @@ export class StdioServerLauncher {
       const status = mcpServer.getStatus();
       logger.info(`[stdio-${shortId}] ✅ 服务器启动成功!`);
       logger.info(`[stdio-${shortId}] 📊 反馈收集服务: http://localhost:${status.webPort}`);
-      logger.info(`[stdio-${shortId}] 🔧 Toolbar服务: http://localhost:${status.toolbarPort}`);
+
 
       // 设置进程退出时的清理
       this.setupCleanupHandlers(clientId, shortId);
@@ -189,7 +189,6 @@ export class StdioServerLauncher {
        shortId: string;
        running: boolean;
        webPort?: number;
-       toolbarPort?: number;
      }>;
    } {
      const servers: Array<{
@@ -197,7 +196,6 @@ export class StdioServerLauncher {
        shortId: string;
        running: boolean;
        webPort?: number;
-       toolbarPort?: number;
      }> = [];
 
      let activeCount = 0;
@@ -215,7 +213,6 @@ export class StdioServerLauncher {
          shortId: string;
          running: boolean;
          webPort?: number;
-         toolbarPort?: number;
        } = {
          clientId,
          shortId,
@@ -226,9 +223,7 @@ export class StdioServerLauncher {
          serverInfo.webPort = status.webPort;
        }
 
-       if (status.toolbarPort) {
-         serverInfo.toolbarPort = status.toolbarPort;
-       }
+
 
        servers.push(serverInfo);
      }

@@ -114,6 +114,21 @@ export class PromptManager {
   }
 
   /**
+   * 清理缓存
+   * 用于多实例环境下的数据同步
+   */
+  clearCaches(): void {
+    try {
+      logger.debug('开始清理PromptManager缓存...');
+      this.database.clearCaches();
+      logger.debug('PromptManager缓存清理完成');
+    } catch (error) {
+      logger.error('清理PromptManager缓存失败:', error);
+      // 不抛出异常，避免阻断主要业务流程
+    }
+  }
+
+  /**
    * 获取数据库路径
    */
   getDatabasePath(): string {

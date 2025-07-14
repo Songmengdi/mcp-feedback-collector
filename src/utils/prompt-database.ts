@@ -259,10 +259,19 @@ export class PromptDatabase {
   close() {
     try {
       this.storage.close();
-      logger.debug('PromptDatabase已关闭');
+      logger.debug('PromptDatabase (JSON存储) 已关闭');
     } catch (error) {
       logger.error('关闭PromptDatabase失败:', error);
     }
+  }
+
+  /**
+   * 清理缓存（已废弃）
+   * JsonStorage不再使用缓存，此方法保留以维持API兼容性
+   */
+  clearCaches() {
+    // JsonStorage已移除缓存机制，无需执行任何操作
+    logger.debug('clearCaches调用（JsonStorage无缓存，无需操作）');
   }
 
   getDatabasePath() {

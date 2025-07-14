@@ -26,25 +26,16 @@ export class JsonStorage {
   private data: JsonStorageData;
   private storagePath: string;
   private readonly version: number = 3;
-  private readonly autoSaveDelay: number = 100; // ms
-  private saveTimer: NodeJS.Timeout | null = null;
   private saving: boolean = false;
   private pendingSave: boolean = false;
-
-  // 缓存优化
-  private sceneMap: Map<string, Scene> = new Map();
-  private sceneModeMap: Map<string, SceneMode> = new Map();
-  private promptMap: Map<string, ScenePrompt> = new Map(); // key: sceneId:modeId
+  private dataChanged: boolean = false; // 跟踪数据是否发生变化
 
   constructor() {
     this.storagePath = this.getStoragePath();
     this.ensureStorageDirectory();
     this.data = this.initializeEmptyData();
     this.loadData();
-    this.rebuildCaches();
   }
-
-
 
   /**
    * 获取跨平台存储路径
@@ -519,41 +510,86 @@ step5. 检查存在错误,统一修正
     this.data.data.clear_prompts = [clearPrompt];
 
     this.data.metadata.updated_at = now;
+    this.markDataChanged(); // 标记数据已变更
   }
 
+
+
+
+
   /**
-   * 重建缓存
+   * 从文件重新加载数据
+   * 优化版本：增强错误处理和稳定性
    */
-  private rebuildCaches(): void {
-    this.sceneMap.clear();
-    this.sceneModeMap.clear();
-    this.promptMap.clear();
+  private reloadDataFromFile(): void {
+    try {
+      if (!existsSync(this.storagePath)) {
+        logger.warn('存储文件不存在，保持当前数据');
+        return;
+      }
 
-    this.data.data.scenes.forEach(scene => {
-      this.sceneMap.set(scene.id, scene);
-    });
+      // 检查文件是否可读
+      try {
+        const stats = require('fs').statSync(this.storagePath);
+        if (stats.size === 0) {
+          logger.warn('存储文件为空，保持当前数据');
+          return;
+        }
+      } catch (statError) {
+        logger.warn('无法读取文件状态，保持当前数据:', statError);
+        return;
+      }
 
-    this.data.data.scene_modes.forEach(mode => {
-      this.sceneModeMap.set(mode.id, mode);
-    });
+      // 读取文件内容
+      let content: string;
+      try {
+        content = readFileSync(this.storagePath, 'utf8');
+      } catch (readError) {
+        logger.error('读取存储文件失败，尝试从备份恢复:', readError);
+        this.loadFromBackup();
+        return;
+      }
 
-    this.data.data.scene_prompts.forEach(prompt => {
-      this.promptMap.set(`${prompt.scene_id}:${prompt.mode_id}`, prompt);
-    });
+      // 解析JSON
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(content);
+      } catch (parseError) {
+        logger.error('JSON解析失败，尝试从备份恢复:', parseError);
+        this.loadFromBackup();
+        return;
+      }
+
+      // 验证数据结构
+      try {
+        this.data = this.validateData(parsedData);
+        logger.debug('数据重新加载成功');
+      } catch (validateError) {
+        logger.error('数据验证失败，尝试从备份恢复:', validateError);
+        this.loadFromBackup();
+        return;
+      }
+
+    } catch (error) {
+      logger.error('重新加载数据时发生未预期错误，保持当前数据:', error);
+    }
   }
 
   /**
-   * 计划保存
+   * 标记数据已变更
+   */
+  private markDataChanged(): void {
+    this.dataChanged = true;
+  }
+
+  /**
+   * 立即保存
    */
   private scheduleSave(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-    }
-    this.saveTimer = setTimeout(() => {
-      this.saveToFile().catch(error => {
-        logger.error('计划保存失败:', error);
-      });
-    }, this.autoSaveDelay);
+    this.markDataChanged(); // 标记数据已变更
+    this.saveToFile().catch(error => {
+      logger.error('立即保存失败:', error);
+    });
   }
 
   /**
@@ -572,8 +608,11 @@ step5. 检查存在错误,统一修正
       const tempPath = this.storagePath + '.tmp';
       const backupPath = this.storagePath + '.backup';
 
-      // 更新时间戳
-      this.data.metadata.updated_at = this.now();
+      // 只在数据真正变更时更新时间戳
+      if (this.dataChanged) {
+        this.data.metadata.updated_at = this.now();
+        this.dataChanged = false; // 重置变更标志
+      }
 
       // 1. 写入临时文件
       await fs.writeFile(tempPath, JSON.stringify(this.data, null, 2), 'utf8');
@@ -612,7 +651,11 @@ step5. 检查存在错误,统一修正
    * 同步保存到文件
    */
     try {
-      this.data.metadata.updated_at = this.now();
+      // 只在数据真正变更时更新时间戳
+      if (this.dataChanged) {
+        this.data.metadata.updated_at = this.now();
+        this.dataChanged = false; // 重置变更标志
+      }
       
       // 添加调试信息
       logger.debug(`准备保存JSON数据到: ${this.storagePath}`);
@@ -671,6 +714,7 @@ step5. 检查存在错误,统一修正
    */
   getAllScenes(): Scene[] {
     try {
+      this.reloadDataFromFile();
       return [...this.data.data.scenes].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
     } catch (error) {
       logger.error('获取所有场景失败:', error);
@@ -683,7 +727,8 @@ step5. 检查存在错误,统一修正
    */
   getScene(sceneId: string): Scene | null {
     try {
-      return this.sceneMap.get(sceneId) || null;
+      this.reloadDataFromFile();
+      return this.data.data.scenes.find(s => s.id === sceneId) || null;
     } catch (error) {
       logger.error(`获取场景失败 (id: ${sceneId}):`, error);
       throw new MCPError(`Failed to get scene: ${sceneId}`, 'SCENE_GET_ERROR', { sceneId, error });
@@ -703,9 +748,8 @@ step5. 检查存在错误,统一修正
       };
 
       this.data.data.scenes.push(newScene);
-      this.sceneMap.set(newScene.id, newScene);
       this.scheduleSave();
-      
+
       logger.debug(`场景已创建 (id: ${scene.id})`);
     } catch (error) {
       logger.error(`创建场景失败 (id: ${scene.id}):`, error);
@@ -748,7 +792,6 @@ step5. 检查存在错误,统一修正
       }
 
       this.data.data.scenes[sceneIndex] = updatedScene;
-      this.sceneMap.set(sceneId, updatedScene);
       this.scheduleSave();
       
       logger.debug(`场景已更新 (id: ${sceneId})`);
@@ -775,8 +818,6 @@ step5. 检查存在错误,统一修正
       // 删除场景
       this.data.data.scenes.splice(sceneIndex, 1);
 
-      // 更新缓存
-      this.rebuildCaches();
       this.scheduleSave();
       
       logger.debug(`场景已删除 (id: ${sceneId})`);
@@ -794,6 +835,7 @@ step5. 检查存在错误,统一修正
    */
   getSceneModes(sceneId: string): SceneMode[] {
     try {
+      this.reloadDataFromFile();
       return this.data.data.scene_modes
         .filter(mode => mode.scene_id === sceneId)
         .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
@@ -808,7 +850,8 @@ step5. 检查存在错误,统一修正
    */
   getSceneMode(modeId: string): SceneMode | null {
     try {
-      return this.sceneModeMap.get(modeId) || null;
+      this.reloadDataFromFile();
+      return this.data.data.scene_modes.find(m => m.id === modeId) || null;
     } catch (error) {
       logger.error(`获取场景模式失败 (id: ${modeId}):`, error);
       throw new MCPError(`Failed to get scene mode: ${modeId}`, 'SCENE_MODE_GET_ERROR', { modeId, error });
@@ -828,9 +871,8 @@ step5. 检查存在错误,统一修正
       };
 
       this.data.data.scene_modes.push(newMode);
-      this.sceneModeMap.set(newMode.id, newMode);
       this.scheduleSave();
-      
+
       logger.info(`场景模式创建成功: ${mode.name} (${mode.id})`);
     } catch (error) {
       logger.error('场景模式创建失败:', error);
@@ -881,7 +923,6 @@ step5. 检查存在错误,统一修正
       }
 
       this.data.data.scene_modes[modeIndex] = updatedMode;
-      this.sceneModeMap.set(modeId, updatedMode);
       this.scheduleSave();
       
       logger.info(`场景模式更新成功: ${modeId}`);
@@ -906,8 +947,6 @@ step5. 检查存在错误,统一修正
       // 删除模式
       this.data.data.scene_modes.splice(modeIndex, 1);
 
-      // 更新缓存
-      this.rebuildCaches();
       this.scheduleSave();
       
       logger.debug(`场景模式已删除 (id: ${modeId})`);
@@ -964,7 +1003,6 @@ step5. 检查存在错误,统一修正
             }
             
             this.data.data.scene_modes[modeIndex] = updatedMode;
-            this.sceneModeMap.set(modeId, updatedMode);
           }
         }
       });
@@ -992,7 +1030,7 @@ step5. 检查存在错误,统一修正
             is_default: false,
             updated_at: now
           };
-          this.sceneModeMap.set(mode.id, this.data.data.scene_modes[index]);
+
           updateCount++;
         }
       });
@@ -1023,7 +1061,6 @@ step5. 检查存在错误,统一修正
             is_default: false,
             updated_at: now
           };
-          this.sceneMap.set(scene.id, this.data.data.scenes[index]);
           updateCount++;
         }
       });
@@ -1046,7 +1083,8 @@ step5. 检查存在错误,统一修正
    */
   getScenePrompt(sceneId: string, modeId: string): ScenePrompt | null {
     try {
-      return this.promptMap.get(`${sceneId}:${modeId}`) || null;
+      this.reloadDataFromFile();
+      return this.data.data.scene_prompts.find(p => p.scene_id === sceneId && p.mode_id === modeId) || null;
     } catch (error) {
       logger.error(`获取场景提示词失败 (sceneId: ${sceneId}, modeId: ${modeId}):`, error);
       throw new MCPError(`Failed to get scene prompt: ${sceneId}/${modeId}`, 'SCENE_PROMPT_GET_ERROR', { sceneId, modeId, error });
@@ -1059,8 +1097,7 @@ step5. 检查存在错误,统一修正
   saveScenePrompt(sceneId: string, modeId: string, prompt: string): void {
     try {
       const now = this.now();
-      const key = `${sceneId}:${modeId}`;
-      const existingIndex = this.data.data.scene_prompts.findIndex(p => 
+      const existingIndex = this.data.data.scene_prompts.findIndex(p =>
         p.scene_id === sceneId && p.mode_id === modeId
       );
 
@@ -1076,7 +1113,6 @@ step5. 检查存在错误,统一修正
             updated_at: now
           };
           this.data.data.scene_prompts[existingIndex] = updatedPrompt;
-          this.promptMap.set(key, updatedPrompt);
           logger.debug(`场景提示词已更新 (sceneId: ${sceneId}, modeId: ${modeId})`);
         }
       } else {
@@ -1089,7 +1125,6 @@ step5. 检查存在错误,统一修正
           updated_at: now
         };
         this.data.data.scene_prompts.push(newPrompt);
-        this.promptMap.set(key, newPrompt);
         logger.debug(`场景提示词已创建 (sceneId: ${sceneId}, modeId: ${modeId})`);
       }
 
@@ -1114,7 +1149,6 @@ step5. 检查存在错误,统一修正
       }
 
       this.data.data.scene_prompts.splice(promptIndex, 1);
-      this.promptMap.delete(`${sceneId}:${modeId}`);
       this.scheduleSave();
       
       logger.debug(`场景提示词已删除 (sceneId: ${sceneId}, modeId: ${modeId})`);
@@ -1130,6 +1164,7 @@ step5. 检查存在错误,统一修正
    */
   getScenePrompts(sceneId: string): ScenePrompt[] {
     try {
+      this.reloadDataFromFile();
       return this.data.data.scene_prompts.filter(prompt => prompt.scene_id === sceneId);
     } catch (error) {
       logger.error(`获取场景所有提示词失败 (sceneId: ${sceneId}):`, error);
@@ -1144,6 +1179,7 @@ step5. 检查存在错误,统一修正
    */
   getClearPrompt(): ClearPrompt | null {
     try {
+      this.reloadDataFromFile();
       // 1. 首先尝试获取自定义提示词（is_default = false）
       const customPrompt = this.data.data.clear_prompts
         .filter(p => !p.is_default)
@@ -1290,11 +1326,6 @@ step5. 检查存在错误,统一修正
    */
   close(): void {
     try {
-      if (this.saveTimer) {
-        clearTimeout(this.saveTimer);
-        this.saveTimer = null;
-      }
-      
       // 确保所有数据已保存
       this.saveToFileSync();
       

@@ -67,6 +67,8 @@
       </div>
     </div>
   </div>
+  <!-- 状态消息组件 -->
+  <StatusMessage ref="localStatusMessageRef" />
 </template>
 
 <script setup lang="ts">
@@ -76,7 +78,8 @@ import { useScenesStore } from '../stores/scenes'
 import promptService from '../services/promptService'
 import shortcutService from '../services/shortcutService'
 import { LightBulbIcon } from '../components/icons'
-
+import StatusMessage from './StatusMessage.vue'
+import type { MessageType } from '../types/app'
 // Store引用
 const scenesStore = useScenesStore()
 
@@ -84,7 +87,8 @@ const scenesStore = useScenesStore()
 const showModal = ref(false)
 const customPhrase = ref('')
 const isLoading = ref(false)
-
+// 状态消息组件相关
+const localStatusMessageRef = ref<InstanceType<typeof StatusMessage>>()
 
 // 计算属性 - 模式相关
 const availableModes = computed(() => {
@@ -219,9 +223,8 @@ const resetToDefault = async () => {
 }
 
 // 显示状态消息（临时实现）
-const showStatusMessage = (type: string, message: string) => {
-  console.log(`[${type.toUpperCase()}] ${message}`)
-  // TODO: 集成StatusMessage组件
+const showStatusMessage = (type: MessageType, message: string) => {
+  localStatusMessageRef.value?.showMessage(type, message)
 }
 
 // 生命周期

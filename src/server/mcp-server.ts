@@ -16,6 +16,18 @@ import { PromptManager } from '../utils/prompt-manager.js';
 import { PromptDatabase } from '../utils/prompt-database.js';
 import { WebServer } from './web-server.js';
 
+function formatDate(date: Date) {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return (
+    date.getFullYear() + '-' +
+    pad(date.getMonth() + 1) + '-' +
+    pad(date.getDate()) + ' ' +
+    pad(date.getHours()) + ':' +
+    pad(date.getMinutes()) + ':' +
+    pad(date.getSeconds())
+  );
+}
+
 /**
  * MCP服务器类
  */
@@ -67,9 +79,9 @@ export class MCPServer {
     server.registerTool(
       'collect_feedback',
       {
-        description: 'Collect feedback from users about AI work summary. This tool opens a web interface for users to provide feedback on the AI\'s work.',
+        description: '当你需要总结任务或询问意见时,必须调用该工具;这个工具将打开一个浏览器窗口,以供用户确认问题或指导你的工作.',
         inputSchema: {
-          work_summary: z.string().describe('Briefly describe the work you have completed (within 200 words)')
+          work_summary: z.string().describe('对当前你完成任务的摘要,或需要询问的问题')
         }
       },
       async (args: { work_summary: string }): Promise<CallToolResult> => {
@@ -96,6 +108,27 @@ export class MCPServer {
             error
           );
         }
+      }
+    );
+
+    // 注册规则查询工具
+    server.registerTool(
+      "when-rules-use",
+      {
+        description: "基于当前讨论,分析,计划,编码等目前具体场景, 提供选择合适规则的指南!",
+        inputSchema: { prompt: z.string().describe('当前需要讨论,分析,计划,编码等的具体场景是什么(例如: java代码编写, 方法重构, 版本控制编写等等), 需详细描述') }
+      },
+      async ({ prompt }) => {
+        return {
+          content: [{ type: "text", text: 
+            `当前的场景: ${prompt}
+# 规则查询路径步骤
+1. 基于场景的描述, 阅读项目根目录下的\`rules/when_rule_use.md\`文件
+2. 根据文件指南, 选择适合当前场景的规则文件
+3. 阅读规则文件, 并遵循规则,完成后续的任务.
+`
+          }]
+        };
       }
     );
 
@@ -319,6 +352,13 @@ export class MCPServer {
     const { work_summary } = params;
     const timeout_seconds = this.config.dialogTimeout;
 
+    // 清理缓存以确保获取最新数据（多实例同步）
+    try {
+      this.promptDatabase.clearCaches();
+    } catch (error) {
+      logger.warn('清理缓存失败，继续执行:', error);
+    }
+
     // 简化会话ID获取 - 从活跃传输中获取第一个会话ID
     const activeSessionIds = Object.keys(this.transports);
     const mcpSessionId = activeSessionIds.length > 0 ? activeSessionIds[0] : undefined;
@@ -374,17 +414,27 @@ export class MCPServer {
 
     // 检查是否需要添加清理提示词
     const hasClearRequest = feedback.some(item => item.clearPreviousConversation === true);
-    
+    content.push({
+      type: 'text',
+      text: 
+`# 全局性要求(必须严格执行)
+- 始终遵循用户的最新反馈内容
+- 当你询问用户意见,或完成任务后,必须使用 "collect_feedback" 工具请求用户反馈信息;
+- 在任何时候,都不允许主动地结束对话, 必须 使用"collect_feedback" 打开反馈工具 总结你的任务或询问用户的意见;
+- 当发现 "collect_feedback" 调用失败,或被手动取消,你需要重新尝试调用工具,而不是立即结束;
+`
+    })
     if (hasClearRequest) {
       try {
         // 从数据库获取清理提示词
         const clearPrompt = this.promptDatabase.getClearPrompt();
         const promptText = clearPrompt?.prompt_text;
-        
         // 在首位添加清理提示词
         content.push({
           type: 'text',
-          text: `# 清理上下文
+          text: 
+`
+# 清理上下文
 ${promptText}
 ---
 `
@@ -394,9 +444,11 @@ ${promptText}
         // 出错时使用默认提示词
         content.push({
           type: 'text',
-          text: `# 清理上下文
+          text: 
+`# 清理上下文
 **(重要)不再关注之前我们谈论的话题,专注于接下来的具体任务**
 ---
+
 `
         });
       }
@@ -408,22 +460,10 @@ ${promptText}
       if (item.text) {
         content.push({
           type: 'text',
-          text: `${item.text}`
+          text: `${item.text}
+`
         });
       }
-      content.push({
-        type: 'text',
-        text: `
-# 反馈工具
-- 使用MCP服务"mcp-feedback-collector"中的collect_feedback工具来收集反馈.
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-- **当发现反馈工具调用失败,或者用户手动取消,你需要重新尝试调用工具,而不是立即结束.**
-
-## 必须遵循要求(强制性规则(必须遵守,非常重要))
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-- **每当您要完成用户请求时，请使用MCP服务"mcp-feedback-collector"中的collect_feedback工具收集反馈，而不是简单地结束该过程。继续调用该MCP，直到用户的反馈为空，然后结束请求。**
-`
-      })
       // 添加图片（转换为base64格式）
       if (item.images && item.images.length > 0) {
         content.push({
@@ -454,7 +494,8 @@ ${promptText}
       // 添加时间戳
       content.push({
         type: 'text',
-        text: `提交时间: ${new Date(item.timestamp).toLocaleString()}\n`
+        text: 
+`提交时间: ${formatDate(new Date(item.timestamp))}\n`
       });
     });
 
@@ -688,8 +729,7 @@ ${promptText}
   getStatus(): { 
     running: boolean; 
     webPort?: number;
-    toolbarPort?: number;
-    toolbarStatus?: any;
+
     clientId?: string;
   } {
     const result: { 
