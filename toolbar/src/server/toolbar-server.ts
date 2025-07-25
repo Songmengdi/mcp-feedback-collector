@@ -1,6 +1,8 @@
 import cors from 'cors';
 import express from 'express';
 import { createServer } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { createSRPCBridge, SRPCWebSocketBridge, ToolbarRPCHandler } from '../toolbar/index.js';
 import { PromptBroadcastData, WebSocketClient } from '../toolbar/types/index.js';
@@ -73,6 +75,12 @@ export class ToolbarServer {
    * 设置路由
    */
   private setupRoutes(): void {
+    // 静态文件服务 - 提供frontend目录下的文件
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const frontendPath = path.join(__dirname, '../frontend');
+    this.app.use(express.static(frontendPath));
+    
     // Ping端点 - 工具栏用于发现服务
     this.app.get('/ping/stagewise', (req, res) => {
       logger.info('[Toolbar] Ping request received');
@@ -573,4 +581,4 @@ export class ToolbarServer {
       version: '1.0.0'
     };
   }
-} 
+}

@@ -56,6 +56,12 @@ async function startMCPServer(options: {
       logger.disableColors();
     }
     
+    // 在MCP模式下禁用emoji图标
+    if (modeStatus.isStdio) {
+      logger.disableEmojis();
+      logger.disableColors();
+    }
+    
     // 加载配置并覆盖传输模式
     const config = getConfig();
     config.transportMode = modeStatus.transportMode;

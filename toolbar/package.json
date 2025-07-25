@@ -15,9 +15,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r frontend dist/",
     "start": "node dist/main.js",
-    "dev": "tsx src/main.ts",
     "clean": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')){fs.rmSync('dist', {recursive: true, force: true})}\"",
     "prepublishOnly": "npm run clean && npm run build",
     "test": "echo \"No tests specified\" && exit 0"

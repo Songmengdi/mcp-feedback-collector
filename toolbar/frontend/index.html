@@ -3,76 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Toolbar Monitor - 工具栏监控台</title>
+    <title>Prompt Monitor</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <h1>🔧 Toolbar Monitor</h1>
-            <p class="subtitle">独立工具栏服务监控台</p>
-        </header>
+    <div class="app-container">
+        <!-- 顶部导航栏 -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <h1 class="app-title">
+                    <i class="fas fa-terminal"></i>
+                    Prompt Monitor
+                </h1>
+                <span class="connection-badge" id="connection-badge">
+                    <i class="fas fa-circle"></i>
+                    <span id="connection-text">离线</span>
+                </span>
+            </div>
+            <div class="nav-right">
+                <button class="nav-btn" id="settings-toggle" title="设置">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button class="nav-btn" id="expand-toggle" title="展开/收起">
+                    <i class="fas fa-expand-alt"></i>
+                </button>
+            </div>
+        </nav>
 
-        <main class="main">
-            <!-- 消息显示区域 -->
-            <section class="messages-section">
-                <h2>📝 Prompt消息监控</h2>
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- Prompt消息区域 (始终显示) -->
+            <section class="prompt-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-comments"></i> 实时Prompt消息</h2>
+                    <div class="header-actions">
+                        <span class="message-counter">
+                            <span id="message-count">0</span> 条消息
+                        </span>
+                        <button class="action-btn secondary" id="clear-btn" title="清除消息">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="action-btn secondary" id="export-btn" title="导出数据">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="messages-container">
-                    <div class="messages-header">
-                        <span>实时Prompt消息</span>
-                        <span class="message-count">共 <span id="message-count">0</span> 条</span>
-                    </div>
                     <div class="messages-list" id="messages-list">
-                        <div class="no-messages">暂无消息</div>
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>暂无Prompt消息</p>
+                            <small>等待连接或新的Prompt输入...</small>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <!-- 状态监控区域 -->
-            <section class="status-section">
-                <h2>📊 服务状态</h2>
-                <div class="status-grid">
-                    <div class="status-card">
-                        <div class="status-indicator" id="connection-status"></div>
-                        <span>连接状态</span>
-                        <span id="connection-text">未连接</span>
-                    </div>
-                    <div class="status-card">
-                        <span>端口</span>
-                        <span id="port-info">5748/15749</span>
-                    </div>
-                    <div class="status-card">
-                        <span>连接数</span>
-                        <span id="client-count">-</span>
-                    </div>
-                    <div class="status-card">
-                        <span>运行时间</span>
-                        <span id="uptime">-</span>
-                    </div>
-                    <div class="status-card">
-                        <span>最新消息</span>
-                        <span id="latest-time">-</span>
-                    </div>
+            <!-- 可折叠的控制面板 -->
+            <section class="control-panel" id="control-panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-sliders-h"></i> 控制面板</h3>
+                    <button class="collapse-btn" id="collapse-btn">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
                 </div>
-            </section>
+                
+                <div class="panel-content">
+                    <!-- 连接控制 -->
+                    <div class="control-group">
+                        <h4>连接管理</h4>
+                        <div class="button-group">
+                            <button class="action-btn primary" id="connect-btn">
+                                <i class="fas fa-plug"></i>
+                                连接服务
+                            </button>
+                            <button class="action-btn danger" id="disconnect-btn" disabled>
+                                <i class="fas fa-times"></i>
+                                断开连接
+                            </button>
+                        </div>
+                    </div>
 
-            <!-- 连接控制区域 -->
-            <section class="control-section">
-                <h2>🔗 连接控制</h2>
-                <div class="control-buttons">
-                    <button id="connect-btn" class="btn btn-primary">连接</button>
-                    <button id="disconnect-btn" class="btn btn-secondary" disabled>断开</button>
-                    <button id="clear-btn" class="btn btn-warning">清除历史</button>
-                    <button id="export-btn" class="btn btn-info">导出数据</button>
+
+
+                    <!-- 状态信息 -->
+                    <div class="control-group">
+                        <h4>服务状态</h4>
+                        <div class="status-info">
+                            <div class="info-item">
+                                <span class="label">端口</span>
+                                <span class="value" id="port-info">5748/15749</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">客户端</span>
+                                <span class="value" id="client-count">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">运行时间</span>
+                                <span class="value" id="uptime">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">最后更新</span>
+                                <span class="value" id="latest-time">-</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
+    </div>
 
-        <footer class="footer">
-            <p>Standalone Toolbar Service v1.0.0</p>
-        </footer>
+    <!-- 连接状态提示 -->
+    <div class="connection-toast" id="connection-toast">
+        <i class="fas fa-wifi"></i>
+        <span id="toast-message">正在连接...</span>
     </div>
 
     <script src="main.js"></script>
 </body>
-</html> 
+</html>

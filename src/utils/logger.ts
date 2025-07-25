@@ -26,11 +26,15 @@ const LOG_COLORS: Record<LogLevel, string> = {
 
 const RESET_COLOR = '\x1b[0m';
 
+// 常见的emoji图标正则表达式
+const EMOJI_REGEX = /[❌✅📁🌐🚀🧪📋🔍💡⏱️🛑🔄🎯⚠️❤️📊]/g;
+
 class Logger {
   private currentLevel: LogLevel = 'info';
   private logFile?: string;
   private fileLoggingEnabled = false;
   private colorsDisabled = false;
+  private emojisDisabled = false;
 
   /**
    * 设置日志级别
@@ -51,6 +55,13 @@ class Logger {
    */
   disableColors(): void {
     this.colorsDisabled = true;
+  }
+
+  /**
+   * 禁用emoji图标输出（用于MCP模式）
+   */
+  disableEmojis(): void {
+    this.emojisDisabled = true;
   }
 
   /**
@@ -81,7 +92,12 @@ class Logger {
 
       fs.writeFileSync(this.logFile, header);
 
-      console.log(`📁 日志文件已创建: ${this.logFile}`);
+      // 根据是否禁用emoji显示不同消息
+      if (this.emojisDisabled) {
+        console.log(`Log file created: ${this.logFile}`);
+      } else {
+        console.log(`📁 日志文件已创建: ${this.logFile}`);
+      }
     } catch (error) {
       console.error('❌ 无法创建日志文件:', error);
       console.error('错误详情:', {
@@ -120,9 +136,22 @@ class Logger {
   }
 
   /**
+   * 移除emoji图标
+   */
+  private removeEmojis(text: string): string {
+    if (!this.emojisDisabled) {
+      return text;
+    }
+    return text.replace(EMOJI_REGEX, '').trim();
+  }
+
+  /**
    * 格式化日志消息
    */
   private formatMessage(level: LogLevel, message: string, ...args: unknown[]): string {
+    // 移除emoji图标（如果需要）
+    const cleanMessage = this.removeEmojis(message);
+    
     const timestamp = this.formatTimestamp();
     const levelStr = level.toUpperCase().padEnd(5);
 
@@ -130,11 +159,11 @@ class Logger {
 
     if (this.colorsDisabled) {
       // 无颜色模式（用于MCP）
-      formattedMessage = `[${timestamp}] ${levelStr} ${message}`;
+      formattedMessage = `[${timestamp}] ${levelStr} ${cleanMessage}`;
     } else {
       // 有颜色模式（用于终端）
       const color = LOG_COLORS[level];
-      formattedMessage = `${color}[${timestamp}] ${levelStr}${RESET_COLOR} ${message}`;
+      formattedMessage = `${color}[${timestamp}] ${levelStr}${RESET_COLOR} ${cleanMessage}`;
     }
 
     if (args.length > 0) {
