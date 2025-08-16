@@ -25,16 +25,6 @@ const packageJsonPath = join(__dirname, '../package.json');
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 const VERSION = packageJson.version;
 
-// 注意：日志设置现在统一在startMCPServer函数中处理
-// 这里不再进行全局的日志设置，避免冲突
-
-/**
- * 显示欢迎信息
- */
-function showWelcome(): void {
-  console.log('🎯 MCP Feedback Collector v' + VERSION);
-  console.log('基于Node.js的现代化反馈收集器\n');
-}
 
 /**
  * 启动MCP服务器
@@ -77,8 +67,6 @@ async function startMCPServer(options: {
     }
 
     if (!modeStatus.isMCP) {
-      // 交互模式：显示欢迎信息
-      showWelcome();
       logger.debug(`启动模式: 交互模式 (传输模式: ${modeStatus.transportMode}, TTY: ${process.stdin.isTTY})`);
     } else {
       logger.debug(`启动模式: MCP模式 (传输模式: ${modeStatus.transportMode}, TTY: ${process.stdin.isTTY})`);
@@ -93,7 +81,7 @@ async function startMCPServer(options: {
       // 启用文件日志记录
       logger.enableFileLogging();
       logger.setLevel('debug');
-      logger.debug('🐛 调试模式已启用，日志将保存到文件');
+      logger.debug('调试模式已启用，日志将保存到文件');
     }
     
     // 显示配置信息
@@ -145,7 +133,7 @@ async function startMCPServer(options: {
     
     // 根据模式决定是否保持进程运行
     if (options.persistent || options.web) {
-      logger.info('🔄 持久运行模式已启用，服务器将保持运行直到手动停止');
+      logger.info('持久运行模式已启用，服务器将保持运行直到手动停止');
       
       // 保持进程运行
       process.stdin.resume();
@@ -193,8 +181,6 @@ async function startMCPServer(options: {
  */
 async function startDevServer(): Promise<void> {
   try {
-    showWelcome();
-    console.log('🚀 启动开发模式服务器 (固定端口: 10050)...\n');
     
     // 加载配置
     const config = getConfig();
@@ -211,39 +197,39 @@ async function startDevServer(): Promise<void> {
     const server = new MCPServer(config, webServer);
     await server.startWebOnly();
     
-    console.log('✅ 开发服务器已启动');
-    console.log(`🌐 Web界面: http://localhost:10050`);
-    console.log(`🔗 API端点: http://localhost:10050/api`);
-    console.log('📝 前端代理已配置到此端口\n');
-    console.log('💡 提示: 在另一个终端运行 "npm run dev:frontend" 启动前端开发服务器');
-    console.log('🛑 按 Ctrl+C 停止服务器\n');
+    console.log('开发服务器已启动');
+    console.log(`Web界面: http://localhost:10050`);
+    console.log(`API端点: http://localhost:10050/api`);
+    console.log('前端代理已配置到此端口\n');
+    console.log('提示: 在另一个终端运行 "npm run dev:frontend" 启动前端开发服务器');
+    console.log('按 Ctrl+C 停止服务器\n');
     
     // 保持进程运行
     process.stdin.resume();
     
     // 处理优雅关闭
     process.on('SIGINT', async () => {
-      console.log('\n🛑 收到停止信号，正在关闭开发服务器...');
+      console.log('\n收到停止信号，正在关闭开发服务器...');
       await server.stop();
-      console.log('✅ 开发服务器已停止');
+      console.log('开发服务器已停止');
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
-      console.log('\n🛑 收到终止信号，正在关闭开发服务器...');
+      console.log('\n收到终止信号，正在关闭开发服务器...');
       await server.stop();
-      console.log('✅ 开发服务器已停止');
+      console.log('开发服务器已停止');
       process.exit(0);
     });
     
   } catch (error) {
     if (error instanceof MCPError) {
-      console.error(`❌ 开发服务器启动失败 [${error.code}]: ${error.message}`);
+      console.error(`开发服务器启动失败 [${error.code}]: ${error.message}`);
     } else if (error instanceof Error) {
-      console.error('❌ 开发服务器启动失败:', error.message);
+      console.error('开发服务器启动失败:', error.message);
       logger.debug('错误堆栈:', error.stack);
     } else {
-      console.error('❌ 未知错误:', error);
+      console.error('未知错误:', error);
     }
     process.exit(1);
   }
@@ -255,15 +241,15 @@ async function startDevServer(): Promise<void> {
 async function healthCheck(): Promise<void> {
   try {
     const config = getConfig();
-    console.log('✅ 配置验证通过');
-    console.log(`⏱️  超时时间: ${config.dialogTimeout}秒`);
+    console.log('配置验证通过');
+    console.log(`超时时间: ${config.dialogTimeout}秒`);
     
     
   } catch (error) {
     if (error instanceof MCPError) {
-      console.error(`❌ 配置错误 [${error.code}]: ${error.message}`);
+      console.error(`配置错误 [${error.code}]: ${error.message}`);
     } else {
-      console.error('❌ 健康检查失败:', error);
+      console.error('健康检查失败:', error);
     }
     process.exit(1);
   }
@@ -319,12 +305,11 @@ program
   .option('-f, --format <format>', '输出格式 (json|text)', 'text')
   .action(async (options) => {
     try {
-      showWelcome();
 
       const config = getConfig();
       logger.setLevel('error'); // 减少日志输出
 
-      logger.info('🔍 获取性能监控指标...');
+      logger.info(' 获取性能监控指标...');
 
       // 创建MCP服务器实例
       const server = new MCPServer(config);
@@ -348,7 +333,7 @@ program
         }
 
       } catch (error) {
-        logger.error('❌ 获取性能指标失败:', error);
+        logger.error('获取性能指标失败:', error);
       }
 
       await server.stop();
@@ -366,12 +351,11 @@ program
   .option('-m, --message <message>', '测试工作汇报内容', '这是一个测试工作汇报，用于验证collect_feedback功能是否正常工作。')
   .action(async (options) => {
     try {
-      showWelcome();
 
       const config = getConfig();
       logger.setLevel(config.logLevel as any);
 
-      logger.info('🧪 开始测试collect_feedback工具函数...');
+      logger.info('开始测试collect_feedback工具函数...');
 
       // 创建MCP服务器实例
       const server = new MCPServer(config);
@@ -383,7 +367,7 @@ program
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // 创建测试会话
-      logger.info('📋 创建测试会话...');
+      logger.info('创建测试会话...');
 
       const testParams = {
         work_summary: options.message
@@ -401,27 +385,27 @@ program
         const result = await response.json() as any;
 
         if (result.success) {
-          logger.info('✅ 测试会话创建成功');
-          logger.info(`📋 会话ID: ${result.session_id}`);
-          logger.info(`🌐 反馈页面: ${result.feedback_url}`);
+          logger.info('测试会话创建成功');
+          logger.info(`会话ID: ${result.session_id}`);
+          logger.info(`反馈页面: ${result.feedback_url}`);
 
           // 自动打开浏览器
           try {
             const open = await import('open');
             await open.default(result.feedback_url);
-            logger.info('🚀 浏览器已自动打开反馈页面');
+            logger.info('浏览器已自动打开反馈页面');
           } catch (error) {
             logger.warn('无法自动打开浏览器，请手动访问上述URL');
           }
 
-          logger.info('💡 现在您可以在浏览器中测试完整的反馈流程');
-          logger.info(`⏱️  会话将在 ${config.dialogTimeout} 秒后超时`);
+          logger.info('现在您可以在浏览器中测试完整的反馈流程');
+          logger.info(`会话将在 ${config.dialogTimeout} 秒后超时`);
 
         } else {
-          logger.error('❌ 测试会话创建失败:', result.error);
+          logger.error('测试会话创建失败:', result.error);
         }
       } catch (error) {
-        logger.error('❌ 创建测试会话时出错:', error);
+        logger.error('创建测试会话时出错:', error);
       }
 
       // 保持进程运行

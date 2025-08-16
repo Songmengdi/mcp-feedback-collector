@@ -574,7 +574,7 @@ export class WebServer {
     });
 
     // 创建新场景
-    this.app.post('/api/scenes', (req, res) => {
+    this.app.post('/api/scenes', async (req, res) => {
       try {
         const { name, description, icon, isDefault, sortOrder } = req.body;
 
@@ -606,7 +606,7 @@ export class WebServer {
         };
 
         logger.debug('创建场景请求数据:', sceneRequest);
-        const scene = this.promptManager.createScene(sceneRequest);
+        const scene = await this.promptManager.createScene(sceneRequest);
 
         res.json({
           success: true,
@@ -626,7 +626,7 @@ export class WebServer {
     });
 
     // 更新场景
-    this.app.put('/api/scenes/:sceneId', (req, res) => {
+    this.app.put('/api/scenes/:sceneId', async (req, res) => {
       try {
         const { sceneId } = req.params;
         const { name, description, isDefault, icon, sortOrder } = req.body;
@@ -664,7 +664,7 @@ export class WebServer {
         if (icon !== undefined) sceneRequest.icon = icon;
         if (sortOrder !== undefined) sceneRequest.sortOrder = sortOrder;
 
-        const scene = this.promptManager.updateScene(sceneId, sceneRequest);
+        const scene = await this.promptManager.updateScene(sceneId, sceneRequest);
 
         if (!scene) {
           res.status(404).json({
@@ -693,10 +693,10 @@ export class WebServer {
     });
 
     // 删除场景
-    this.app.delete('/api/scenes/:sceneId', (req, res) => {
+    this.app.delete('/api/scenes/:sceneId', async (req, res) => {
       try {
         const { sceneId } = req.params;
-        const deleted = this.promptManager.deleteScene(sceneId);
+        const deleted = await this.promptManager.deleteScene(sceneId);
 
         if (!deleted) {
           res.status(404).json({
@@ -959,10 +959,10 @@ export class WebServer {
     });
 
     // 删除场景提示词
-    this.app.delete('/api/scenes/:sceneId/modes/:modeId/prompt', (req, res) => {
+    this.app.delete('/api/scenes/:sceneId/modes/:modeId/prompt', async (req, res) => {
       try {
         const { sceneId, modeId } = req.params;
-        const deleted = this.promptManager.deleteScenePrompt(sceneId, modeId);
+        const deleted = await this.promptManager.deleteScenePrompt(sceneId, modeId);
 
         res.json({
           success: true,
@@ -1328,7 +1328,7 @@ export class WebServer {
   private setupSocketHandlers(): void {
     this.io.on('connection', (socket) => {
       logger.socket('connect', socket.id);
-      logger.info(`✅ 新的WebSocket连接: ${socket.id}`);
+      logger.info(`新的WebSocket连接: ${socket.id}`);
 
       // 建立Web Socket与MCP会话的关联
       const mcpSessionId = socket.handshake.query['mcpSessionId'] as string;
@@ -1338,12 +1338,12 @@ export class WebServer {
       
       if (mcpSessionId) {
         this.socketMcpMapping.set(socket.id, mcpSessionId);
-        logger.info(`✅ Web Socket ${socket.id} 关联到MCP会话: ${mcpSessionId}`);
+        logger.info(`Web Socket ${socket.id} 关联到MCP会话: ${mcpSessionId}`);
         
         // 验证关联的MCP会话是否有对应的反馈会话
         const matchingSession = this.findSessionByMcpId(mcpSessionId);
         if (matchingSession) {
-          logger.info(`✅ 找到匹配的反馈会话: ${matchingSession.sessionId}`);
+          logger.info(`找到匹配的反馈会话: ${matchingSession.sessionId}`);
         } else {
           logger.warn(`⚠️  未找到MCP会话 ${mcpSessionId} 对应的反馈会话，可能存在时序问题`);
         }
@@ -1384,7 +1384,7 @@ export class WebServer {
           const matchingSession = this.findSessionByMcpId(socketMcpSessionId);
           if (matchingSession) {
             // 分配匹配的会话
-            logger.info(`✅ 会话分配成功 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 分配到匹配的反馈会话: ${matchingSession.sessionId}`);
+            logger.info(`会话分配成功 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 分配到匹配的反馈会话: ${matchingSession.sessionId}`);
             socket.emit('session_assigned', {
               session_id: matchingSession.sessionId,
               work_summary: matchingSession.session.workSummary
@@ -1392,7 +1392,7 @@ export class WebServer {
             return;
           } else {
             // 未找到匹配会话，记录详细信息
-            logger.warn(`❌ 未找到匹配会话 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId})`);
+            logger.warn(`未找到匹配会话 - Socket ${socket.id} (MCP会话: ${socketMcpSessionId})`);
             logger.warn(`可能原因: 1) 会话已超时被清理 2) 会话创建失败 3) MCP会话ID不匹配`);
             
             // 检查是否有相似的会话（用于调试）
@@ -1406,7 +1406,7 @@ export class WebServer {
             }
           }
         } else {
-          logger.warn(`❌ Socket ${socket.id} 未关联MCP会话ID`);
+          logger.warn(`Socket ${socket.id} 未关联MCP会话ID`);
         }
         
         // 备选方案：查找最新会话
@@ -1422,7 +1422,7 @@ export class WebServer {
           });
         } else {
           // 无活跃会话
-          logger.error(`❌ 无活跃会话可分配 - Socket ${socket.id}`);
+          logger.error(`无活跃会话可分配 - Socket ${socket.id}`);
           socket.emit('no_active_session', {
             message: '当前无活跃的反馈会话，请重新调用collect_feedback工具'
           });
@@ -1502,7 +1502,7 @@ export class WebServer {
       // 断开连接
       socket.on('disconnect', (reason) => {
         logger.socket('disconnect', socket.id, { reason });
-        logger.info(`❌ WebSocket连接断开: ${socket.id}, 原因: ${reason}`);
+        logger.info(`WebSocket连接断开: ${socket.id}, 原因: ${reason}`);
 
         // 清理Web Socket与MCP会话的关联
         const mcpSessionId = this.socketMcpMapping.get(socket.id);
@@ -1591,7 +1591,7 @@ export class WebServer {
       logger.debug(`反馈来源验证 - Socket: ${socket.id}, Socket关联的MCP会话: ${socketMcpSessionId}, 反馈会话的MCP会话: ${session.mcpSessionId}`);
       
       if (socketMcpSessionId !== session.mcpSessionId) {
-        logger.warn(`❌ 反馈来源验证失败: Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 尝试提交到会话 ${feedbackData.sessionId} (MCP会话: ${session.mcpSessionId})`);
+        logger.warn(`反馈来源验证失败: Socket ${socket.id} (MCP会话: ${socketMcpSessionId}) 尝试提交到会话 ${feedbackData.sessionId} (MCP会话: ${session.mcpSessionId})`);
         
         // 提供详细的诊断信息
         logger.warn(`诊断信息:`);
@@ -1615,7 +1615,7 @@ export class WebServer {
         });
         return;
       }
-      logger.info(`✅ 反馈来源验证通过: MCP会话 ${session.mcpSessionId}`);
+      logger.info(`反馈来源验证通过: MCP会话 ${session.mcpSessionId}`);
     } else {
       logger.debug(`反馈会话 ${feedbackData.sessionId} 没有关联MCP会话，跳过来源验证`);
     }
@@ -1779,12 +1779,12 @@ export class WebServer {
       // 验证会话创建成功
       const createdSession = this.sessionStorage.getSession(sessionId);
       if (!createdSession) {
-        logger.error(`❌ 会话创建失败: ${sessionId}`);
+        logger.error(`会话创建失败: ${sessionId}`);
         reject(new MCPError('Failed to create feedback session', 'SESSION_CREATION_FAILED'));
         return;
       }
       
-      logger.info(`✅ 反馈会话创建成功: ${sessionId}, MCP会话: ${mcpSessionId || 'none'}`);
+      logger.info(`反馈会话创建成功: ${sessionId}, MCP会话: ${mcpSessionId || 'none'}`);
 
       // 根据是否有MCP会话ID决定广播方式
       if (mcpSessionId) {
@@ -1938,6 +1938,9 @@ export class WebServer {
     }
 
     try {
+      // 初始化PromptManager
+      await this.promptManager.initialize();
+      
       // 如果没有预分配端口，则查找可用端口
       if (this.port === 0) {
         logger.debug('查找可用端口...');
@@ -1966,7 +1969,7 @@ export class WebServer {
       });
 
       this.isServerRunning = true;
-      logger.info(`✅ Web服务器启动成功: http://localhost:${this.port}`);
+      logger.info(`Web服务器启动成功: http://localhost:${this.port}`);
 
       // 清理缓存以确保获取最新数据（多实例同步）
       try {
@@ -2035,10 +2038,10 @@ export class WebServer {
       // 释放端口分配（如果不是预分配的端口）
       try {
         await this.portManager.releasePort(currentPort);
-        logger.info(`✅ Web服务器已停止，端口 ${currentPort} 已释放`);
+        logger.info(`Web服务器已停止，端口 ${currentPort} 已释放`);
       } catch (portError) {
         logger.warn(`释放端口 ${currentPort} 失败:`, portError);
-        logger.info(`✅ Web服务器已停止 (端口: ${currentPort})`);
+        logger.info(`Web服务器已停止 (端口: ${currentPort})`);
       }
 
       // 简单等待端口释放

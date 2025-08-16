@@ -1,8 +1,8 @@
 /**
- * 自定义提示词数据库管理器 - JSON存储实现
+ * 自定义提示词数据库管理器 - Lowdb存储实现
  */
 
-import { JsonStorage } from './json-storage.js';
+import { LowdbAdapter } from './lowdb-adapter.js';
 import { logger } from './logger.js';
 import { MCPError } from '../types/index.js';
 
@@ -10,12 +10,12 @@ import { MCPError } from '../types/index.js';
 export type { Scene, SceneMode, ScenePrompt, ClearPrompt } from './json-storage-types.js';
 
 export class PromptDatabase {
-  private storage: JsonStorage;
+  private storage: LowdbAdapter;
 
   constructor() {
     try {
-      this.storage = new JsonStorage();
-      logger.debug('PromptDatabase (JSON存储) 初始化完成');
+      this.storage = new LowdbAdapter();
+      logger.debug('PromptDatabase (Lowdb存储) 初始化完成');
     } catch (error) {
       logger.error('PromptDatabase初始化失败:', error);
       throw new MCPError(
@@ -23,6 +23,19 @@ export class PromptDatabase {
         'PROMPT_DATABASE_INIT_ERROR',
         error
       );
+    }
+  }
+
+  /**
+   * 初始化数据库
+   */
+  async initialize(): Promise<void> {
+    try {
+      await this.storage.initialize();
+      logger.debug('PromptDatabase 初始化完成');
+    } catch (error) {
+      logger.error('PromptDatabase 初始化失败:', error);
+      throw error;
     }
   }
 
@@ -46,9 +59,9 @@ export class PromptDatabase {
     }
   }
 
-  createScene(scene: any) {
+  async createScene(scene: any) {
     try {
-      this.storage.createScene(scene);
+      await this.storage.createScene(scene);
       logger.debug(`场景已创建 (id: ${scene.id})`);
     } catch (error) {
       logger.error(`创建场景失败 (id: ${scene.id}):`, error);
@@ -56,9 +69,9 @@ export class PromptDatabase {
     }
   }
 
-  updateScene(sceneId: string, updates: any) {
+  async updateScene(sceneId: string, updates: any) {
     try {
-      this.storage.updateScene(sceneId, updates);
+      await this.storage.updateScene(sceneId, updates);
       logger.debug(`场景已更新 (id: ${sceneId})`);
     } catch (error) {
       logger.error(`更新场景失败 (id: ${sceneId}):`, error);
@@ -66,9 +79,9 @@ export class PromptDatabase {
     }
   }
 
-  deleteScene(sceneId: string) {
+  async deleteScene(sceneId: string) {
     try {
-      const deleted = this.storage.deleteScene(sceneId);
+      const deleted = await this.storage.deleteScene(sceneId);
       if (deleted) {
         logger.debug(`场景已删除 (id: ${sceneId})`);
       }
@@ -99,9 +112,9 @@ export class PromptDatabase {
     }
   }
 
-  createSceneMode(mode: any) {
+  async createSceneMode(mode: any) {
     try {
-      this.storage.createSceneMode(mode);
+      await this.storage.createSceneMode(mode);
       logger.info(`场景模式创建成功: ${mode.name} (${mode.id})`);
     } catch (error) {
       logger.error('场景模式创建失败:', error);
@@ -109,9 +122,9 @@ export class PromptDatabase {
     }
   }
 
-  updateSceneMode(modeId: string, updates: any) {
+  async updateSceneMode(modeId: string, updates: any) {
     try {
-      this.storage.updateSceneMode(modeId, updates);
+      await this.storage.updateSceneMode(modeId, updates);
       logger.info(`场景模式更新成功: ${modeId}`);
     } catch (error) {
       logger.error('场景模式更新失败:', error);
@@ -119,9 +132,9 @@ export class PromptDatabase {
     }
   }
 
-  deleteSceneMode(modeId: string) {
+  async deleteSceneMode(modeId: string) {
     try {
-      const deleted = this.storage.deleteSceneMode(modeId);
+      const deleted = await this.storage.deleteSceneMode(modeId);
       if (deleted) {
         logger.debug(`场景模式已删除 (id: ${modeId})`);
       }
@@ -141,9 +154,9 @@ export class PromptDatabase {
     }
   }
 
-  updateSceneModeShortcuts(updates: Array<{ modeId: string; shortcut: string | null }>) {
+  async updateSceneModeShortcuts(updates: Array<{ modeId: string; shortcut: string | null }>) {
     try {
-      this.storage.updateSceneModeShortcuts(updates);
+      await this.storage.updateSceneModeShortcuts(updates);
       logger.debug(`批量更新场景模式快捷键完成，共更新 ${updates.length} 个`);
     } catch (error) {
       logger.error('批量更新场景模式快捷键失败:', error);
@@ -151,9 +164,9 @@ export class PromptDatabase {
     }
   }
 
-  clearSceneDefaultModes(sceneId: string) {
+  async clearSceneDefaultModes(sceneId: string) {
     try {
-      this.storage.clearSceneDefaultModes(sceneId);
+      await this.storage.clearSceneDefaultModes(sceneId);
       logger.debug(`已清除场景 ${sceneId} 下所有模式的默认状态`);
     } catch (error) {
       logger.error(`清除场景默认模式失败 (sceneId: ${sceneId}):`, error);
@@ -161,9 +174,9 @@ export class PromptDatabase {
     }
   }
 
-  clearAllScenesDefault() {
+  async clearAllScenesDefault() {
     try {
-      this.storage.clearAllScenesDefault();
+      await this.storage.clearAllScenesDefault();
       logger.debug('已清除所有场景的默认状态');
     } catch (error) {
       logger.error('清除所有场景默认状态失败:', error);
@@ -182,9 +195,9 @@ export class PromptDatabase {
     }
   }
 
-  saveScenePrompt(sceneId: string, modeId: string, prompt: string) {
+  async saveScenePrompt(sceneId: string, modeId: string, prompt: string) {
     try {
-      this.storage.saveScenePrompt(sceneId, modeId, prompt);
+      await this.storage.saveScenePrompt(sceneId, modeId, prompt);
       logger.debug(`场景提示词已保存 (sceneId: ${sceneId}, modeId: ${modeId})`);
     } catch (error) {
       logger.error(`保存场景提示词失败 (sceneId: ${sceneId}, modeId: ${modeId}):`, error);
@@ -192,9 +205,9 @@ export class PromptDatabase {
     }
   }
 
-  deleteScenePrompt(sceneId: string, modeId: string) {
+  async deleteScenePrompt(sceneId: string, modeId: string) {
     try {
-      const deleted = this.storage.deleteScenePrompt(sceneId, modeId);
+      const deleted = await this.storage.deleteScenePrompt(sceneId, modeId);
       if (deleted) {
         logger.debug(`场景提示词已删除 (sceneId: ${sceneId}, modeId: ${modeId})`);
       }
@@ -230,9 +243,9 @@ export class PromptDatabase {
     }
   }
 
-  saveClearPrompt(promptText: string) {
+  async saveClearPrompt(promptText: string) {
     try {
-      this.storage.saveClearPrompt(promptText);
+      await this.storage.saveClearPrompt(promptText);
       logger.info(`清理提示词已保存: 长度=${promptText.length}`);
     } catch (error) {
       logger.error('保存清理提示词失败:', error);
@@ -240,9 +253,9 @@ export class PromptDatabase {
     }
   }
 
-  resetClearPrompt() {
+  async resetClearPrompt() {
     try {
-      const defaultText = this.storage.resetClearPrompt();
+      const defaultText = await this.storage.resetClearPrompt();
       logger.info('清理提示词已重置为默认值');
       return defaultText;
     } catch (error) {
@@ -256,10 +269,10 @@ export class PromptDatabase {
 
   // ===== 生命周期管理方法 =====
 
-  close() {
+  async close() {
     try {
-      this.storage.close();
-      logger.debug('PromptDatabase (JSON存储) 已关闭');
+      await this.storage.close();
+      logger.debug('PromptDatabase (Lowdb存储) 已关闭');
     } catch (error) {
       logger.error('关闭PromptDatabase失败:', error);
     }
@@ -267,11 +280,11 @@ export class PromptDatabase {
 
   /**
    * 清理缓存（已废弃）
-   * JsonStorage不再使用缓存，此方法保留以维持API兼容性
+   * Lowdb不使用缓存，此方法保留以维持API兼容性
    */
   clearCaches() {
-    // JsonStorage已移除缓存机制，无需执行任何操作
-    logger.debug('clearCaches调用（JsonStorage无缓存，无需操作）');
+    // Lowdb不需要缓存机制，无需执行任何操作
+    logger.debug('clearCaches调用（Lowdb无缓存，无需操作）');
   }
 
   getDatabasePath() {

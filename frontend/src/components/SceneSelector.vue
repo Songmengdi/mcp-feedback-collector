@@ -178,17 +178,17 @@ onUnmounted(() => {
   background-color: #252526;
   border: 1px solid #3e3e42;
   border-radius: 6px;
-  padding: 16px 20px;
+  padding: 12px 16px;
   margin-bottom: 0; /* 移除margin，使用父容器gap */
   flex-shrink: 0; /* 防止压缩 */
-  max-height: 200px; /* 防止过度展开 */
+  max-height: 140px; /* 压缩高度 */
 }
 
 .scene-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .scene-header-right {

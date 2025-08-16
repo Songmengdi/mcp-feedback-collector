@@ -2,6 +2,9 @@
   <div class="image-upload-container">
     <!-- 上传工具栏 -->
     <div class="toolbar">
+      <div class="toolbar-label">
+        <span class="attachment-label">附件图片（可选）</span>
+      </div>
       <div class="toolbar-buttons">
         <button type="button" class="toolbar-btn" @click="selectImages">
           📁 选择图片
@@ -306,15 +309,25 @@ const showStatusMessage = (type: string, message: string) => {
 
 .toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 8px; /* 减少下边距 */
   gap: 10px; /* 减少间距 */
 }
 
+.toolbar-label {
+  flex-shrink: 0;
+}
+
+.attachment-label {
+  color: #cccccc;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .toolbar-buttons {
   display: flex;
   gap: 8px;
+  margin-left: auto; /* 让按钮区域靠右 */
 }
 
 .toolbar-btn {
@@ -350,10 +363,10 @@ const showStatusMessage = (type: string, message: string) => {
 }
 
 .image-preview-area {
-  height: 96px; /* 固定高度：80px(图片) + 16px(padding) */
+  height: 84px; /* 压缩高度：72px(图片) + 12px(padding) */
   border: 2px dashed #3e3e42;
   border-radius: 4px;
-  padding: 8px;
+  padding: 6px;
   background: #1e1e1e;
   overflow: hidden; /* 防止内容溢出 */
 }
@@ -368,8 +381,8 @@ const showStatusMessage = (type: string, message: string) => {
 
 .image-preview {
   position: relative;
-  width: 80px;
-  height: 80px; /* 固定高度，确保与预览区域匹配 */
+  width: 72px;
+  height: 72px; /* 压缩高度，确保与预览区域匹配 */
   background: #252526;
   border: 1px solid #3e3e42;
   border-radius: 3px;

@@ -5,41 +5,37 @@
         <span>💬</span>
         您的反馈
       </div>
+      <div class="clear-control-group">
+        <label class="switch-label">
+          <span class="switch-text">清理之前对话</span>
+          <div class="switch-container">
+            <input 
+              v-model="clearPreviousConversation" 
+              type="checkbox"
+              class="switch-input"
+              @change="handleClearSwitchChange"
+            />
+            <span class="switch-slider"></span>
+          </div>
+        </label>
+        <button 
+          type="button"
+          class="edit-prompt-btn"
+          @click="showClearPromptEditor"
+          title="编辑清理提示词"
+        >
+          <PencilIcon class="edit-icon" />
+        </button>
+      </div>
     </div>
     <div class="feedback-body" ref="feedbackBodyRef">
       <form @submit.prevent="handleSubmit">
         <div class="form-group textarea-group">
-          <div class="feedback-label-row">
-            <span class="form-label">反馈内容</span>
-            <div class="clear-control-group">
-              <label class="switch-label">
-                <span class="switch-text">清理之前对话</span>
-                <div class="switch-container">
-                  <input 
-                    v-model="clearPreviousConversation" 
-                    type="checkbox"
-                    class="switch-input"
-                    @change="handleClearSwitchChange"
-                  />
-                  <span class="switch-slider"></span>
-                </div>
-              </label>
-              <button 
-                type="button"
-                class="edit-prompt-btn"
-                @click="showClearPromptEditor"
-                title="编辑清理提示词"
-              >
-                <PencilIcon class="edit-icon" />
-              </button>
-            </div>
-          </div>
           <textarea
             ref="textareaRef"
             v-model="feedbackText"
             class="form-textarea"
             :placeholder="placeholderText"
-            :style="{ height: textareaHeight }"
             @paste="handlePaste"
           ></textarea>
         </div>
@@ -50,7 +46,6 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">附件图片（可选）</label>
           <ImageUpload />
         </div>
 
@@ -111,7 +106,7 @@ const scenesStore = useScenesStore()
 const feedbackText = ref('')
 const isSubmitting = ref(false)
 const clearPreviousConversation = ref(false)
-const textareaHeight = ref('120px') // 动态计算的textarea高度
+// textareaHeight已移除，改为CSS的height: 100%
 const feedbackBodyRef = ref<HTMLElement>()
 const textareaRef = ref<HTMLTextAreaElement>()
 
@@ -405,53 +400,7 @@ const showStatusMessage = (type: string, message: string) => {
   // TODO: 集成StatusMessage组件
 }
 
-// 动态计算textarea高度
-const calculateTextareaHeight = () => {
-  if (!feedbackBodyRef.value) return
-
-  try {
-    const container = feedbackBodyRef.value
-    const containerHeight = container.clientHeight
-    
-    // 计算其他组件的高度
-    const formLabel = container.querySelector('.form-label') as HTMLElement
-    const phraseModeGroup = container.querySelector('.phrase-mode-group') as HTMLElement
-    const imageUploadGroup = container.querySelector('.form-group:nth-child(3)') as HTMLElement // 图片上传组
-    const buttonGroup = container.querySelector('.button-group') as HTMLElement
-    
-    let usedHeight = 0
-    
-    // 计算已使用的高度
-    if (formLabel) usedHeight += formLabel.offsetHeight + 8 // label + margin
-    if (phraseModeGroup) usedHeight += phraseModeGroup.offsetHeight + 12 // phrase-mode + margin
-    if (imageUploadGroup) usedHeight += imageUploadGroup.offsetHeight + 12 // image-upload + margin
-    if (buttonGroup) usedHeight += buttonGroup.offsetHeight + 8 // button-group + margin
-    
-    // 计算剩余可用高度
-    const availableHeight = containerHeight - usedHeight
-    const minHeight = 120 // 最小高度
-    
-    // 使用剩余高度，但不小于最小高度
-    const calculatedHeight = Math.max(availableHeight, minHeight)
-    
-    textareaHeight.value = `${calculatedHeight - 30}px` // 减去30px，进行高度冗余
-  } catch (error) {
-    console.warn('高度计算失败，使用默认高度:', error)
-    textareaHeight.value = '120px'
-  }
-}
-
-// 防抖函数
-const debounce = (func: Function, wait: number) => {
-  let timeout: number
-  return (...args: any[]) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func.apply(null, args), wait)
-  }
-}
-
-// 防抖的高度计算函数
-const debouncedCalculateHeight = debounce(calculateTextareaHeight, 100)
+// textarea高度计算函数已移除，改为CSS的height: 100%
 
 // 快捷键处理 - 只处理表单相关的快捷键，模式切换由shortcutService统一处理
 const handleKeydown = (e: KeyboardEvent) => {
@@ -529,28 +478,12 @@ onMounted(() => {
   
   document.addEventListener('keydown', handleKeydown)
   
-  // 添加窗口尺寸变化监听
-  window.addEventListener('resize', debouncedCalculateHeight)
-  
-  // 添加容器尺寸变化监听
-  let resizeObserver: ResizeObserver | null = null
-  if (feedbackBodyRef.value && 'ResizeObserver' in window) {
-    resizeObserver = new ResizeObserver(debouncedCalculateHeight)
-    resizeObserver.observe(feedbackBodyRef.value)
-  }
-  
   nextTick(() => {
     const textarea = document.querySelector('.form-textarea') as HTMLTextAreaElement
     if (textarea) {
       textarea.focus()
     }
-    
-    // 初始计算高度
-    setTimeout(calculateTextareaHeight, 100)
   })
-  
-  // 保存resizeObserver引用用于清理
-  ;(window as any)._feedbackResizeObserver = resizeObserver
 })
 
 onUnmounted(() => {
@@ -558,14 +491,6 @@ onUnmounted(() => {
   shortcutService.destroy()
   
   document.removeEventListener('keydown', handleKeydown)
-  window.removeEventListener('resize', debouncedCalculateHeight)
-  
-  // 清理ResizeObserver
-  const resizeObserver = (window as any)._feedbackResizeObserver
-  if (resizeObserver) {
-    resizeObserver.disconnect()
-    delete (window as any)._feedbackResizeObserver
-  }
 })
 </script>
 
@@ -581,16 +506,20 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0; /* 允许收缩 */
   overflow: hidden; /* 防止内容溢出 */
+  height: 100%; /* 占用全部可用高度 */
 }
 
 .feedback-header {
-  margin-bottom: 15px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .feedback-title {
   color: #ffffff;
-  font-size: 18px;
-  margin-bottom: 15px;
+  font-size: 16px;
+  margin-bottom: 0;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -603,10 +532,18 @@ onUnmounted(() => {
   min-height: 0; /* 确保可以收缩 */
   display: flex;
   flex-direction: column;
+  height: 100%; /* 占用全部可用高度 */
+}
+
+.feedback-body form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .form-group {
-  margin-bottom: 12px; /* 减少间距 */
+  margin-bottom: 10px; /* 进一步减少间距 */
 }
 
 .form-group:last-child {
@@ -622,8 +559,8 @@ onUnmounted(() => {
 .form-label {
   display: block;
   color: #cccccc;
-  font-size: 14px;
-  margin-bottom: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
   font-weight: 500;
 }
 
@@ -632,7 +569,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .feedback-label-row .form-label {
@@ -711,10 +648,12 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  margin-bottom: 6px; /* 减少下边距 */
 }
 
 .form-textarea {
   width: 100%;
+  height: 100%;
   padding: 10px 12px;
   background-color: #3c3c3c;
   border: 1px solid #5a5a5a;
@@ -722,10 +661,8 @@ onUnmounted(() => {
   color: #cccccc;
   font-size: 14px;
   font-family: inherit;
-  transition: border-color 0.2s ease, height 0.2s ease;
+  transition: border-color 0.2s ease;
   resize: none;
-  /* 移除flex和固定高度限制，使用动态绑定的height */
-  min-height: 120px; /* 保留最小高度作为fallback */
 }
 
 .form-textarea:focus {
@@ -739,14 +676,14 @@ onUnmounted(() => {
   gap: 10px;
   justify-content: flex-end;
   flex-shrink: 0; /* 确保按钮组不被压缩 */
-  margin-top: 8px; /* 添加上边距 */
+  margin-top: 6px; /* 减少上边距 */
 }
 
 .btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 8px 14px;
   border: none;
   border-radius: 4px;
   font-size: 14px;
@@ -808,6 +745,73 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 为header中的clear-control-group添加样式 */
+.feedback-header .clear-control-group .switch-label {
+  display: flex !important;
+  justify-content: flex-end;
+  align-items: center;
+  cursor: pointer;
+  margin: 0;
+  gap: 8px;
+}
+
+.feedback-header .clear-control-group .switch-text {
+  font-size: 12px;
+  color: #969696;
+  font-weight: 400;
+}
+
+.feedback-header .clear-control-group .switch-container {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.feedback-header .clear-control-group .switch-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.feedback-header .clear-control-group .switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #3e3e42;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.feedback-header .clear-control-group .switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #cccccc;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.feedback-header .clear-control-group .switch-input:checked + .switch-slider {
+  background-color: #0e639c;
+}
+
+.feedback-header .clear-control-group .switch-input:checked + .switch-slider:before {
+  transform: translateX(16px);
+  background-color: white;
+}
+
+.feedback-header .clear-control-group .switch-slider:hover {
+  box-shadow: 0 0 6px rgba(14, 99, 156, 0.3);
 }
 
 /* 编辑提示词按钮样式 */

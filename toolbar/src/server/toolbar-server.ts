@@ -376,16 +376,16 @@ export class ToolbarServer {
           this.broadcastPromptToClients.bind(this)
         );
         
-        logger.debug('[Toolbar] ✅ SRPC WebSocket 桥接器初始化成功');
-        logger.debug('[Toolbar] ✅ Toolbar RPC 处理器初始化成功');
+        logger.debug('[Toolbar] SRPC WebSocket 桥接器初始化成功');
+        logger.debug('[Toolbar] Toolbar RPC 处理器初始化成功');
         
         // 记录已注册的方法
         const registeredMethods = this.srpcBridge.getRegisteredMethods();
-        logger.debug(`[Toolbar] 📋 已注册的 RPC 方法: ${registeredMethods.join(', ')}`);
+        logger.debug(`[Toolbar] 已注册的 RPC 方法: ${registeredMethods.join(', ')}`);
       }
       
     } catch (error) {
-      logger.error('[Toolbar] ❌ SRPC 初始化失败:', error);
+      logger.error('[Toolbar] SRPC 初始化失败:', error);
       // 不抛出错误，允许服务器继续运行
     }
   }
@@ -438,8 +438,8 @@ export class ToolbarServer {
       // SRPC服务器启动成功后初始化SRPC处理器
       this.setupSRPCHandlers();
 
-      logger.info(`[Toolbar] ✅ SRPC服务器启动成功: http://localhost:${this.port}`);
-      logger.info(`[Toolbar] 📡 SRPC WebSocket端点: ws://localhost:${this.port}`);
+      logger.info(`[Toolbar] SRPC服务器启动成功: http://localhost:${this.port}`);
+      logger.info(`[Toolbar]SRPC WebSocket端点: ws://localhost:${this.port}`);
 
       // 确认广播端口
       this.broadcastPort = await this.portManager.getBroadcastPort();
@@ -465,11 +465,11 @@ export class ToolbarServer {
 
       this.isServerRunning = true;
 
-      logger.info(`[Toolbar] ✅ 广播服务器启动成功: http://localhost:${this.broadcastPort}`);
-      logger.info(`[Toolbar] 🔄 广播WebSocket端点: ws://localhost:${this.broadcastPort}/broadcast`);
-      logger.info(`[Toolbar] 🔍 Ping端点: http://localhost:${this.port}/ping/stagewise`);
-      logger.info(`[Toolbar] ❤️  健康检查: http://localhost:${this.port}/health`);
-      logger.info(`[Toolbar] ❤️  广播健康检查: http://localhost:${this.broadcastPort}/health`);
+      logger.info(`[Toolbar]广播服务器启动成功: http://localhost:${this.broadcastPort}`);
+      logger.info(`[Toolbar]广播WebSocket端点: ws://localhost:${this.broadcastPort}/broadcast`);
+      logger.info(`[Toolbar]Ping端点: http://localhost:${this.port}/ping/stagewise`);
+      logger.info(`[Toolbar]健康检查: http://localhost:${this.port}/health`);
+      logger.info(`[Toolbar]广播健康检查: http://localhost:${this.broadcastPort}/health`);
 
     } catch (error) {
       logger.error('[Toolbar] 服务器启动失败:', error);
@@ -543,7 +543,7 @@ export class ToolbarServer {
       });
 
       this.isServerRunning = false;
-      logger.info(`[Toolbar] ✅ 独立Toolbar服务器已停止 (SRPC端口: ${currentPort}, 广播端口: ${currentBroadcastPort})`);
+      logger.info(`[Toolbar] 独立Toolbar服务器已停止 (SRPC端口: ${currentPort}, 广播端口: ${currentBroadcastPort})`);
 
     } catch (error) {
       logger.error('[Toolbar] 停止服务器时出错:', error);

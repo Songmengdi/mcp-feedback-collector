@@ -78,9 +78,9 @@ class Logger {
 
       fs.writeFileSync(this.logFile, header);
 
-      console.log(`📁 日志文件已创建: ${this.logFile}`);
+      console.log(`日志文件已创建: ${this.logFile}`);
     } catch (error) {
-      console.error('❌ 无法创建日志文件:', error);
+      console.error('无法创建日志文件:', error);
       this.fileLoggingEnabled = false;
     }
   }
@@ -161,7 +161,7 @@ class Logger {
         const cleanMessage = this.removeColorCodes(formattedMessage);
         fs.appendFileSync(this.logFile, cleanMessage + '\n');
       } catch (error) {
-        console.error('❌ 写入日志文件失败:', error);
+        console.error('写入日志文件失败:', error);
       }
     }
   }

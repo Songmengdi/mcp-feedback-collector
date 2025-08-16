@@ -125,14 +125,14 @@ export function getConfig(): Config {
  * 显示配置信息（隐藏敏感信息）
  */
 export function displayConfig(config: Config): void {
-  console.log('📋 MCP Feedback Collector Configuration:');
-  console.log(`  Web Port: 动态分配`);
-  console.log(`  Dialog Timeout: ${config.dialogTimeout}s`);
-  console.log(`  CORS Origin: ${config.corsOrigin}`);
-  console.log(`  Max File Size: ${(config.maxFileSize / 1024 / 1024).toFixed(1)}MB`);
-  console.log(`  Log Level: ${config.logLevel}`);
-  console.log(`  Server Host: ${config.serverHost || '自动检测'}`);
-  console.log(`  Server Base URL: ${config.serverBaseUrl || '自动生成'}`);
-  console.log(`  Transport Mode: ${config.transportMode || TransportMode.STDIO}`);
-  console.log(`  MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
+  console.log('MCP Feedback Collector Configuration:');
+  console.log(`Web Port: 动态分配`);
+  console.log(`Dialog Timeout: ${config.dialogTimeout}s`);
+  console.log(`CORS Origin: ${config.corsOrigin}`);
+  console.log(`Max File Size: ${(config.maxFileSize / 1024 / 1024).toFixed(1)}MB`);
+  console.log(`Log Level: ${config.logLevel}`);
+  console.log(`Server Host: ${config.serverHost || '自动检测'}`);
+  console.log(`Server Base URL: ${config.serverBaseUrl || '自动生成'}`);
+  console.log(`Transport Mode: ${config.transportMode || TransportMode.STDIO}`);
+  console.log(`MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
 }

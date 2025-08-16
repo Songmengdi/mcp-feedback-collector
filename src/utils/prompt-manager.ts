@@ -46,9 +46,29 @@ export interface SceneConfig {
 
 export class PromptManager {
   private database: PromptDatabase;
+  private initialized = false;
 
   constructor() {
     this.database = new PromptDatabase();
+  }
+
+  /**
+   * 初始化数据库
+   */
+  async initialize(): Promise<void> {
+    if (!this.initialized) {
+      await this.database.initialize();
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * 确保数据库已初始化
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
   }
 
 
@@ -213,8 +233,9 @@ export class PromptManager {
   /**
    * 创建新场景
    */
-  createScene(sceneRequest: SceneRequest): Scene {
+  async createScene(sceneRequest: SceneRequest): Promise<Scene> {
     try {
+      await this.ensureInitialized();
       logger.debug('接收到场景创建请求:', sceneRequest);
       
       // 验证必要字段
@@ -229,7 +250,7 @@ export class PromptManager {
       // 如果要设置为默认场景，先清除所有场景的默认状态
       if (sceneRequest.isDefault === true) {
         logger.debug('设置为默认场景 - 先清除所有场景的默认状态');
-        this.database.clearAllScenesDefault();
+        await this.database.clearAllScenesDefault();
       }
 
       const now = Date.now();
@@ -243,7 +264,7 @@ export class PromptManager {
       };
       
       logger.debug('准备存储的场景数据:', sceneData);
-      this.database.createScene(sceneData);
+      await this.database.createScene(sceneData);
       
       // 返回完整的场景对象（保持数据库格式）
       const scene: Scene = {
@@ -272,14 +293,15 @@ export class PromptManager {
   /**
    * 更新场景
    */
-  updateScene(sceneId: string, sceneRequest: Partial<SceneRequest>): Scene | null {
+  async updateScene(sceneId: string, sceneRequest: Partial<SceneRequest>): Promise<Scene | null> {
     try {
+      await this.ensureInitialized();
       logger.debug('接收到场景更新请求:', { sceneId, sceneRequest });
       
       // 如果要设置为默认场景，先清除所有场景的默认状态
       if (sceneRequest.isDefault === true) {
         logger.debug('设置为默认场景 - 先清除所有场景的默认状态');
-        this.database.clearAllScenesDefault();
+        await this.database.clearAllScenesDefault();
       }
       
       // 构建更新数据，转换驼峰命名为下划线命名
@@ -291,7 +313,7 @@ export class PromptManager {
       if (sceneRequest.sortOrder !== undefined) updateData.sort_order = sceneRequest.sortOrder;
       
       logger.debug('准备更新的场景数据:', updateData);
-      this.database.updateScene(sceneId, updateData);
+      await this.database.updateScene(sceneId, updateData);
       logger.info(`场景已更新 (id: ${sceneId})`);
       
       // 返回更新后的场景对象
@@ -309,9 +331,10 @@ export class PromptManager {
   /**
    * 删除场景
    */
-  deleteScene(sceneId: string): boolean {
+  async deleteScene(sceneId: string): Promise<boolean> {
     try {
-      const deleted = this.database.deleteScene(sceneId);
+      await this.ensureInitialized();
+      const deleted = await this.database.deleteScene(sceneId);
       if (deleted) {
         logger.info(`场景已删除 (id: ${sceneId})`);
       } else {
@@ -543,9 +566,10 @@ export class PromptManager {
   /**
    * 删除场景提示词
    */
-  deleteScenePrompt(sceneId: string, modeId: string): boolean {
+  async deleteScenePrompt(sceneId: string, modeId: string): Promise<boolean> {
     try {
-      const deleted = this.database.deleteScenePrompt(sceneId, modeId);
+      await this.ensureInitialized();
+      const deleted = await this.database.deleteScenePrompt(sceneId, modeId);
       if (deleted) {
         logger.info(`场景提示词已删除 (scene: ${sceneId}, mode: ${modeId})`);
       } else {
@@ -746,9 +770,10 @@ export class PromptManager {
   /**
    * 重置清理提示词为默认值
    */
-  resetClearPrompt(): string {
+  async resetClearPrompt(): Promise<string> {
     try {
-      const defaultPromptText = this.database.resetClearPrompt();
+      await this.ensureInitialized();
+      const defaultPromptText = await this.database.resetClearPrompt();
       logger.info('清理提示词已重置为默认值');
       return defaultPromptText;
     } catch (error) {

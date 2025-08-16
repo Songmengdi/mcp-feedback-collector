@@ -59,8 +59,8 @@ export class StdioServerLauncher {
       this.activeServers.set(clientId, mcpServer);
 
       const status = mcpServer.getStatus();
-      logger.info(`[stdio-${shortId}] ✅ 服务器启动成功!`);
-      logger.info(`[stdio-${shortId}] 📊 反馈收集服务: http://localhost:${status.webPort}`);
+      logger.info(`[stdio-${shortId}] 服务器启动成功!`);
+      logger.info(`[stdio-${shortId}] 反馈收集服务: http://localhost:${status.webPort}`);
 
 
       // 设置进程退出时的清理
@@ -144,7 +144,7 @@ export class StdioServerLauncher {
       logger.info(`[stdio-${shortId}] 销毁WebServer实例...`);
       await this.webServerManager.destroyInstance(clientId);
 
-      logger.info(`[stdio-${shortId}] ✅ 客户端资源清理完成`);
+      logger.info(`[stdio-${shortId}] 客户端资源清理完成`);
 
     } catch (error) {
       logger.error(`[stdio-${shortId}] 清理客户端资源失败:`, error);
@@ -174,7 +174,7 @@ export class StdioServerLauncher {
     // 清理WebServer管理器
     await this.webServerManager.cleanup();
 
-    logger.info('✅ 所有stdio客户端资源清理完成');
+    logger.info('所有stdio客户端资源清理完成');
   }
 
   /**

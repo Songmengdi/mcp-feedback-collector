@@ -198,7 +198,7 @@ export class PerformanceMonitor {
     const metrics = this.getMetrics();
     
     return `
-📊 性能监控报告
+性能监控报告
 ================
 
 💾 内存使用:

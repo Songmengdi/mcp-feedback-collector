@@ -73,13 +73,12 @@
           }"
           @click="selectSceneSelection(scene)"
         >
-          <!-- 拖拽句柄 -->
-          <div class="drag-handle" title="拖拽排序">⋮⋮</div>
-          
           <!-- 场景卡片头部 -->
           <div class="scene-card-header">
             <div class="scene-info">
               <h3 class="scene-name">
+                <!-- 拖拽句柄 -->
+                <div class="drag-handle" title="拖拽排序">⋮⋮</div>
                 {{ scene.name }}
                 <span v-if="scene.isDefault" class="default-badge">默认</span>
               </h3>
@@ -1192,7 +1191,13 @@ const handleModeReorder = async (event: any) => {
   if (!managementSelectedScene.value) return
   
   const { oldIndex, newIndex } = event
-  if (oldIndex === newIndex) return
+  const startTime = performance.now()
+  console.log(`[handleModeReorder] 拖拽事件: oldIndex=${oldIndex}, newIndex=${newIndex}`)
+  
+  if (oldIndex === newIndex) {
+    console.log('[handleModeReorder] 位置未变化，跳过更新')
+    return
+  }
   
   saving.value = true
   try {
@@ -1211,10 +1216,17 @@ const handleModeReorder = async (event: any) => {
       newMap.set(sceneId, latestModes)
       sceneModeData.value = newMap
       
-      localStatusMessageRef.value?.showMessage('success', '模式排序已更新')
+      const endTime = performance.now()
+      console.log(`[handleModeReorder] 排序更新完成，耗时: ${(endTime - startTime).toFixed(2)}ms，更新数量: ${updates.length}`)
+      localStatusMessageRef.value?.showMessage('success', `模式排序已更新，共更新 ${updates.length} 个模式`)
+    } else {
+      const endTime = performance.now()
+      console.log(`[handleModeReorder] 排序未发生变化，跳过更新，耗时: ${(endTime - startTime).toFixed(2)}ms`)
+      localStatusMessageRef.value?.showMessage('info', '模式排序未发生变化')
     }
   } catch (error) {
-    console.error('拖拽排序失败:', error)
+    const endTime = performance.now()
+    console.error(`[handleModeReorder] 排序更新失败，耗时: ${(endTime - startTime).toFixed(2)}ms`, error)
     localStatusMessageRef.value?.showMessage('error', '排序更新失败，请重试')
     
     // 错误时重新加载数据恢复状态
@@ -1229,25 +1241,25 @@ const handleModeReorder = async (event: any) => {
 // 场景拖拽排序完成处理
 const handleSceneReorder = async (event: any) => {
   const { oldIndex, newIndex } = event
-  if (oldIndex === newIndex) return
+  if (oldIndex === newIndex) {
+    return
+  }
   
   saving.value = true
   try {
-    const newOrderedScenes = sortedScenes.value
+    const newOrderedScenes = [...scenes.value] 
     
     // 重新分配sortOrder
     const updates = reassignSceneOrder(newOrderedScenes)
-    
     if (updates.length > 0) {
       // 批量更新场景排序
       await batchUpdateScenes(newOrderedScenes, updates)
-      
-      localStatusMessageRef.value?.showMessage('success', '场景排序已更新')
+      localStatusMessageRef.value?.showMessage('success', `场景排序已更新，共更新 ${updates.length} 个场景`)
+    } else {
+      localStatusMessageRef.value?.showMessage('info', '场景排序未发生变化')
     }
   } catch (error) {
-    console.error('场景拖拽排序失败:', error)
     localStatusMessageRef.value?.showMessage('error', '排序更新失败，请重试')
-    
     // 错误时重新加载数据恢复状态
     await scenesStore.loadScenes()
   } finally {
@@ -1262,10 +1274,11 @@ const reassignSceneOrder = (scenes: Scene[]) => {
     sortOrder: number
   }> = []
   
+  // 只更新实际发生sortOrder变化的场景，避免不必要的API调用
   scenes.forEach((scene, index) => {
     const newSortOrder = index
     
-    // 只有当排序发生变化时才更新
+    // 仅当sortOrder实际发生变化时才添加到更新列表
     if (scene.sortOrder !== newSortOrder) {
       updates.push({
         sceneId: scene.id,
@@ -1273,6 +1286,8 @@ const reassignSceneOrder = (scenes: Scene[]) => {
       })
     }
   })
+  
+  console.log(`[reassignSceneOrder] 检查 ${scenes.length} 个场景，需要更新 ${updates.length} 个场景的排序:`, updates)
   
   return updates
 }
@@ -1306,6 +1321,9 @@ const batchUpdateScenes = async (
   
   await Promise.all(updatePromises)
   console.log('[batchUpdateScenes] 场景排序更新完成')
+  
+  // 重新加载场景数据确保UI与数据库同步
+  await scenesStore.loadScenes()
 }
 
 // 重新分配快捷键和排序
@@ -1320,7 +1338,7 @@ const reassignShortcutsAndOrder = (modes: SceneMode[]) => {
     const newShortcut = index < 9 ? (index + 1).toString() : undefined
     const newSortOrder = index
     
-    // 只有当快捷键或排序发生变化时才更新
+    // 只有当快捷键或排序实际发生变化时才更新
     if (mode.shortcut !== newShortcut || mode.sortOrder !== newSortOrder) {
       updates.push({
         modeId: mode.id,
@@ -1329,6 +1347,8 @@ const reassignShortcutsAndOrder = (modes: SceneMode[]) => {
       })
     }
   })
+  
+  console.log(`[reassignShortcutsAndOrder] 检查 ${modes.length} 个模式，需要更新 ${updates.length} 个模式的快捷键和排序:`, updates)
   
   return updates
 }
@@ -1679,9 +1699,6 @@ const preloadVisibleSceneModes = async () => {
 }
 
 .scene-card .drag-handle {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   cursor: grab;
   color: #666666;
   font-size: 14px;
@@ -1689,7 +1706,8 @@ const preloadVisibleSceneModes = async () => {
   border-radius: 4px;
   opacity: 0;
   transition: opacity 0.2s ease;
-  z-index: 1;
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .scene-card:hover .drag-handle {

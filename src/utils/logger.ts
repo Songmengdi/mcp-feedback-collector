@@ -27,14 +27,14 @@ const LOG_COLORS: Record<LogLevel, string> = {
 const RESET_COLOR = '\x1b[0m';
 
 // 常见的emoji图标正则表达式
-const EMOJI_REGEX = /[❌✅📁🌐🚀🧪📋🔍💡⏱️🛑🔄🎯⚠️❤️📊]/g;
+const EMOJI_REGEX = /[❌✅📁🌐🚀🧪📋💡⏱️🛑🔄🎯⚠️❤️📊]/g;
 
 class Logger {
-  private currentLevel: LogLevel = 'info';
+  private currentLevel: LogLevel = 'warn';
   private logFile?: string;
   private fileLoggingEnabled = false;
   private colorsDisabled = false;
-  private emojisDisabled = false;
+  private emojisDisabled = true;
 
   /**
    * 设置日志级别
@@ -96,10 +96,10 @@ class Logger {
       if (this.emojisDisabled) {
         console.log(`Log file created: ${this.logFile}`);
       } else {
-        console.log(`📁 日志文件已创建: ${this.logFile}`);
+        console.log(`日志文件已创建: ${this.logFile}`);
       }
     } catch (error) {
-      console.error('❌ 无法创建日志文件:', error);
+      console.error('无法创建日志文件:', error);
       console.error('错误详情:', {
         platform: process.platform,
         cwd: process.cwd(),
@@ -199,7 +199,7 @@ class Logger {
         const cleanMessage = this.removeColorCodes(formattedMessage);
         fs.appendFileSync(this.logFile, cleanMessage + '\n');
       } catch (error) {
-        console.error('❌ 写入日志文件失败:', error);
+        console.error('写入日志文件失败:', error);
       }
     }
   }

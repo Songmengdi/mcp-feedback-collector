@@ -111,27 +111,6 @@ export class MCPServer {
       }
     );
 
-    // 注册规则查询工具
-    server.registerTool(
-      "when-rules-use",
-      {
-        description: "基于当前讨论,分析,计划,编码等目前具体场景, 提供选择合适规则的指南!",
-        inputSchema: { prompt: z.string().describe('当前需要讨论,分析,计划,编码等的具体场景是什么(例如: java代码编写, 方法重构, 版本控制编写等等), 需详细描述') }
-      },
-      async ({ prompt }) => {
-        return {
-          content: [{ type: "text", text: 
-            `当前的场景: ${prompt}
-# 规则查询路径步骤
-1. 基于场景的描述, 阅读项目根目录下的\`rules/when_rule_use.md\`文件
-2. 根据文件指南, 选择适合当前场景的规则文件
-3. 阅读规则文件, 并遵循规则,完成后续的任务.
-`
-          }]
-        };
-      }
-    );
-
     return server;
   }
 
@@ -207,7 +186,7 @@ export class MCPServer {
     });
 
     // 保存清理提示词
-    this.httpApp.post('/api/clear-prompt', (req, res) => {
+    this.httpApp.post('/api/clear-prompt', async (req, res) => {
       try {
         const promptText = req.body['promptText'];
         
@@ -216,7 +195,7 @@ export class MCPServer {
           return;
         }
         
-        this.promptDatabase.saveClearPrompt(promptText);
+        await this.promptDatabase.saveClearPrompt(promptText);
         
         res.json({
           success: true,
@@ -229,9 +208,9 @@ export class MCPServer {
     });
 
     // 重置清理提示词为默认值
-    this.httpApp.delete('/api/clear-prompt', (req, res) => {
+    this.httpApp.delete('/api/clear-prompt', async (req, res) => {
       try {
-        const defaultPromptText = this.promptDatabase.resetClearPrompt();
+        const defaultPromptText = await this.promptDatabase.resetClearPrompt();
         
         res.json({
           success: true,
@@ -247,7 +226,7 @@ export class MCPServer {
     // 启动HTTP服务器
     return new Promise((resolve, reject) => {
       this.httpServer = this.httpApp!.listen(this.config.mcpPort, () => {
-        logger.info(`✅ MCP HTTP服务器启动成功，端口: ${this.config.mcpPort}`);
+        logger.info(`MCP HTTP服务器启动成功，端口: ${this.config.mcpPort}`);
         resolve();
       });
 
@@ -419,9 +398,9 @@ export class MCPServer {
       text: 
 `# 全局性要求(必须严格执行)
 - 始终遵循用户的最新反馈内容
-- 当你询问用户意见,或完成任务后,必须使用 "collect_feedback" 工具请求用户反馈信息;
-- 在任何时候,都不允许主动地结束对话, 必须 使用"collect_feedback" 打开反馈工具 总结你的任务或询问用户的意见;
-- 当发现 "collect_feedback" 调用失败,或被手动取消,你需要重新尝试调用工具,而不是立即结束;
+- 当你询问用户意见,或完成任务后,必须使用 "mcp_mcp-feedback-collector_collect_feedback" 工具请求用户反馈信息;
+- 在任何时候,都不允许主动地结束对话, 必须 使用"mcp_mcp-feedback-collector_collect_feedback" 打开反馈工具 总结你的任务或询问用户的意见;
+- 当发现 "mcp_mcp-feedback-collector_collect_feedback" 调用失败,或被手动取消,你需要重新尝试调用工具,而不是立即结束;
 `
     })
     if (hasClearRequest) {
@@ -546,6 +525,9 @@ ${promptText}
     try {
       logger.info('正在启动MCP服务器...');
       
+      // 初始化数据库
+      await this.promptManager.initialize();
+      
       // 并行启动Web服务器和Toolbar服务器
       await Promise.all([
         this.webServer.start(),
@@ -559,13 +541,13 @@ ${promptText}
         case TransportMode.MCP:
           // 启动HTTP传输
           await this.initializeHttpTransport();
-          logger.info(`✅ MCP服务器启动成功 (${transportMode}模式)`);
+          logger.info(`MCP服务器启动成功 (${transportMode}模式)`);
           break;
           
         case TransportMode.STDIO:
           // 启动stdio传输
           await this.startStdioTransport();
-          logger.info('✅ MCP服务器启动成功 (stdio模式)');
+          logger.info('MCP服务器启动成功 (stdio模式)');
           break;
           
         default:
@@ -608,7 +590,7 @@ ${promptText}
     // 添加消息调试
     const originalOnMessage = transport.onmessage;
     transport.onmessage = (message) => {
-      logger.debug('📥 收到MCP消息:', JSON.stringify(message, null, 2));
+      logger.debug('收到MCP消息:', JSON.stringify(message, null, 2));
       if (originalOnMessage) {
         originalOnMessage(message);
       }
@@ -616,7 +598,7 @@ ${promptText}
 
     const originalSend = transport.send.bind(transport);
     transport.send = (message) => {
-      logger.debug('📤 发送MCP消息:', JSON.stringify(message, null, 2));
+      logger.debug('发送MCP消息:', JSON.stringify(message, null, 2));
       return originalSend(message);
     };
 
@@ -637,7 +619,7 @@ ${promptText}
       ]);
       
       this.isRunning = true;
-      logger.info('✅ Web服务器启动成功');
+      logger.info('Web服务器启动成功');
       
       // 保持进程运行
       process.stdin.resume();
@@ -704,7 +686,7 @@ ${promptText}
       // MCP服务器实例会随传输关闭自动清理
       
       this.isRunning = false;
-      logger.info('✅ 服务器已停止');
+      logger.info('服务器已停止');
       
     } catch (error) {
       logger.error('停止服务器时出错:', error);

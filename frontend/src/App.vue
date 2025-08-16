@@ -193,7 +193,7 @@ body {
 
 .two-column-layout {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   flex: 1;
   align-items: stretch;
   overflow: hidden;
@@ -202,9 +202,8 @@ body {
   height: 100%;
 }
 
-.left-column,
-.right-column {
-  flex: 1;
+.left-column {
+  flex: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -214,7 +213,17 @@ body {
 }
 
 .right-column {
-  gap: 12px; /* 组件间距 */
+  flex: 3;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* 设置最小高度确保两栏高度一致 */
+  min-height: 600px;
+}
+
+.right-column {
+  gap: 8px; /* 减少组件间距 */
 }
 
 /* 响应式设计 */

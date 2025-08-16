@@ -1,10 +1,8 @@
 /**
- * JSON存储相关类型定义
+ * 数据库相关类型定义
  */
 
-// 不再从prompt-database导入，避免循环依赖
-
-// 完全兼容的Scene类型，保持与原始类型一致
+// 场景类型定义
 export interface Scene {
   id: string;
   name: string;
@@ -16,7 +14,7 @@ export interface Scene {
   updated_at: number;
 }
 
-// 完全兼容的SceneMode类型，保持与原始类型一致
+// 场景模式类型定义
 export interface SceneMode {
   id: string;
   scene_id: string;
@@ -30,7 +28,7 @@ export interface SceneMode {
   updated_at: number;
 }
 
-// 定义其他相关类型
+// 场景提示词类型定义
 export interface ScenePrompt {
   scene_id: string;
   mode_id: string;
@@ -39,11 +37,12 @@ export interface ScenePrompt {
   updated_at: number;
 }
 
+// 清理提示词基础类型
 export interface ClearPrompt {
   prompt_text: string;
 }
 
-// JSON存储专用类型
+// 清理提示词记录类型
 export interface ClearPromptRecord {
   id: string;
   user_id: string;
@@ -51,23 +50,4 @@ export interface ClearPromptRecord {
   is_default: boolean;
   created_at: number;
   updated_at: number;
-}
-
-export interface JsonStorageMetadata {
-  created_at: number;
-  updated_at: number;
-  backup_count?: number;
-}
-
-export interface JsonStorageDataSection {
-  scenes: Scene[];
-  scene_modes: SceneMode[];
-  scene_prompts: ScenePrompt[];
-  clear_prompts: ClearPromptRecord[];
-}
-
-export interface JsonStorageData {
-  version: number;
-  metadata: JsonStorageMetadata;
-  data: JsonStorageDataSection;
 } 

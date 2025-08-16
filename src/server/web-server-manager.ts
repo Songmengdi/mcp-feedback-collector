@@ -70,7 +70,7 @@ export class WebServerManager {
 
       this.instances.set(clientId, instance);
 
-      logger.info(`✅ 客户端 ${clientId} 的WebServer实例创建成功，端口: ${port}`);
+      logger.info(`客户端 ${clientId} 的WebServer实例创建成功，端口: ${port}`);
       return webServer;
 
     } catch (error) {
@@ -122,7 +122,7 @@ export class WebServerManager {
       // 从映射中移除
       this.instances.delete(clientId);
 
-      logger.info(`✅ 客户端 ${clientId} 的WebServer实例已销毁，端口 ${instance.port} 已释放`);
+      logger.info(`客户端 ${clientId} 的WebServer实例已销毁，端口 ${instance.port} 已释放`);
 
     } catch (error) {
       logger.error(`销毁客户端 ${clientId} 的WebServer实例失败:`, error);
@@ -204,7 +204,7 @@ export class WebServerManager {
     }
 
     await Promise.all(cleanupPromises);
-    logger.info('✅ 所有WebServer实例清理完成');
+    logger.info('所有WebServer实例清理完成');
   }
 
   /**

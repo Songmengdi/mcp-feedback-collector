@@ -45,22 +45,22 @@ export class ServerCoordinator {
     }
 
     try {
-      logger.info('[Coordinator] 🚀 开始启动服务器...');
+      logger.info('[Coordinator]开始启动服务器...');
       this.startTime = Date.now();
 
       // 启动Web服务器
-      logger.info('[Coordinator] 📡 启动Web服务器...');
+      logger.info('[Coordinator]启动Web服务器...');
       await this.startWebServer();
 
       this.isRunning = true;
       
       // 显示启动成功信息
       const status = this.getStatus();
-      logger.info('[Coordinator] ✅ 服务器启动成功!');
-      logger.info(`[Coordinator] 📊 反馈收集服务: http://localhost:${status.webServer.port}`);
+      logger.info('[Coordinator] 服务器启动成功!');
+      logger.info(`[Coordinator] 反馈收集服务: http://localhost:${status.webServer.port}`);
       
     } catch (error) {
-      logger.error('[Coordinator] ❌ 服务器启动失败:', error);
+      logger.error('[Coordinator] 服务器启动失败:', error);
       
       // 启动失败时尝试清理已启动的服务器
       await this.cleanup();
@@ -74,11 +74,11 @@ export class ServerCoordinator {
    */
   private async startWebServer(): Promise<void> {
     try {
-      logger.info('[Coordinator] 🌐 启动Web服务器...');
+      logger.info('[Coordinator]启动Web服务器...');
       await this.webServer.start();
-      logger.info(`[Coordinator] ✅ Web服务器启动成功: ${this.webServer.getPort()}`);
+      logger.info(`[Coordinator] Web服务器启动成功: ${this.webServer.getPort()}`);
     } catch (error) {
-      logger.error('[Coordinator] ❌ Web服务器启动失败:', error);
+      logger.error('[Coordinator] Web服务器启动失败:', error);
       throw error;
     }
   }
@@ -91,7 +91,7 @@ export class ServerCoordinator {
       return;
     }
 
-    logger.info('[Coordinator] 🛑 开始停止服务器...');
+    logger.info('[Coordinator] 开始停止服务器...');
 
     try {
       // 停止Web服务器
@@ -102,10 +102,10 @@ export class ServerCoordinator {
       this.isRunning = false;
       delete this.startTime;
       
-      logger.info('[Coordinator] ✅ 服务器已停止');
+      logger.info('[Coordinator] 服务器已停止');
       
     } catch (error) {
-      logger.error('[Coordinator] ❌ 停止服务器时出错:', error);
+      logger.error('[Coordinator] 停止服务器时出错:', error);
       throw error;
     }
   }
@@ -115,11 +115,11 @@ export class ServerCoordinator {
    */
   private async stopWebServer(): Promise<void> {
     try {
-      logger.info('[Coordinator] 🌐 停止Web服务器...');
+      logger.info('[Coordinator]停止Web服务器...');
       await this.webServer.stop();
-      logger.info('[Coordinator] ✅ Web服务器已停止');
+      logger.info('[Coordinator] Web服务器已停止');
     } catch (error) {
-      logger.error('[Coordinator] ❌ 停止Web服务器失败:', error);
+      logger.error('[Coordinator] 停止Web服务器失败:', error);
       throw error;
     }
   }
@@ -128,7 +128,7 @@ export class ServerCoordinator {
    * 清理资源（启动失败时使用）
    */
   private async cleanup(): Promise<void> {
-    logger.info('[Coordinator] 🧹 清理资源...');
+    logger.info('[Coordinator]清理资源...');
     
     if (this.webServer.isRunning()) {
       await this.webServer.stop().catch(error => 
@@ -136,7 +136,7 @@ export class ServerCoordinator {
       );
     }
 
-    logger.info('[Coordinator] 🧹 资源清理完成');
+    logger.info('[Coordinator]资源清理完成');
   }
 
   /**
@@ -161,7 +161,7 @@ export class ServerCoordinator {
     toolbarServices: Array<{ port: number; service: string; status: string }>;
     portConfig: any;
   }> {
-    logger.info('[Coordinator] 🔍 发现服务...');
+    logger.info('[Coordinator]发现服务...');
     
     return {
       toolbarServices: [],
@@ -187,7 +187,7 @@ export class ServerCoordinator {
    * 重启服务器
    */
   async restart(): Promise<void> {
-    logger.info('[Coordinator] 🔄 重启服务器...');
+    logger.info('[Coordinator]重启服务器...');
     
     await this.stop();
     
@@ -196,7 +196,7 @@ export class ServerCoordinator {
     
     await this.start();
     
-    logger.info('[Coordinator] ✅ 服务器重启完成');
+    logger.info('[Coordinator] 服务器重启完成');
   }
 
   /**
