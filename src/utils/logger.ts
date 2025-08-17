@@ -2,9 +2,7 @@
  * MCP Feedback Collector - 日志工具
  */
 
-import fs from 'fs';
-import path from 'path';
-import { LogLevel } from '../types/index.js';
+import { LogLevel, TransportMode } from '../types/index.js';
 
 // 日志级别优先级
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -15,26 +13,18 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   silent: 999
 };
 
-// 日志颜色
-const LOG_COLORS: Record<LogLevel, string> = {
-  error: '\x1b[31m', // 红色
-  warn: '\x1b[33m',  // 黄色
-  info: '\x1b[36m',  // 青色
-  debug: '\x1b[37m', // 白色
-  silent: ''         // 无颜色
-};
-
-const RESET_COLOR = '\x1b[0m';
-
-// 常见的emoji图标正则表达式
-const EMOJI_REGEX = /[❌✅📁🌐🚀🧪📋💡⏱️🛑🔄🎯⚠️❤️📊]/g;
 
 class Logger {
   private currentLevel: LogLevel = 'warn';
-  private logFile?: string;
-  private fileLoggingEnabled = false;
-  private colorsDisabled = false;
-  private emojisDisabled = true;
+  private model: TransportMode = TransportMode.STDIO;
+
+  setModel(model: TransportMode): void {
+    this.model = model;
+  }
+
+  getModel(): TransportMode {
+    return this.model;
+  }
 
   /**
    * 设置日志级别
@@ -51,66 +41,6 @@ class Logger {
   }
 
   /**
-   * 禁用颜色输出（用于MCP模式）
-   */
-  disableColors(): void {
-    this.colorsDisabled = true;
-  }
-
-  /**
-   * 禁用emoji图标输出（用于MCP模式）
-   */
-  disableEmojis(): void {
-    this.emojisDisabled = true;
-  }
-
-  /**
-   * 启用文件日志记录
-   */
-  enableFileLogging(logDir: string = 'logs'): void {
-    try {
-      // 使用绝对路径确保跨平台兼容性
-      const absoluteLogDir = path.resolve(logDir);
-      
-      // 确保日志目录存在
-      if (!fs.existsSync(absoluteLogDir)) {
-        fs.mkdirSync(absoluteLogDir, { recursive: true });
-      }
-
-      // 生成Windows兼容的日志文件名（移除非法字符）
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      this.logFile = path.join(absoluteLogDir, `mcp-debug-${timestamp}.log`);
-      this.fileLoggingEnabled = true;
-
-      // 写入日志文件头
-      const header = `=== MCP Feedback Collector Debug Log ===\n` +
-                    `Start Time: ${new Date().toISOString()}\n` +
-                    `Log Level: ${this.currentLevel}\n` +
-                    `Platform: ${process.platform}\n` +
-                    `Node Version: ${process.version}\n` +
-                    `==========================================\n\n`;
-
-      fs.writeFileSync(this.logFile, header);
-
-      // 根据是否禁用emoji显示不同消息
-      if (this.emojisDisabled) {
-        console.log(`Log file created: ${this.logFile}`);
-      } else {
-        console.log(`日志文件已创建: ${this.logFile}`);
-      }
-    } catch (error) {
-      console.error('无法创建日志文件:', error);
-      console.error('错误详情:', {
-        platform: process.platform,
-        cwd: process.cwd(),
-        logDir,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      this.fileLoggingEnabled = false;
-    }
-  }
-
-  /**
    * 检查是否应该输出指定级别的日志
    */
   private shouldLog(level: LogLevel): boolean {
@@ -118,97 +48,26 @@ class Logger {
     if (this.currentLevel === 'silent') {
       return false;
     }
+    if (this.model === TransportMode.STDIO) {
+      return false;
+    }
+
     return LOG_LEVELS[level] <= LOG_LEVELS[this.currentLevel];
   }
 
-  /**
-   * 格式化时间戳
-   */
-  private formatTimestamp(): string {
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    
-    return `${month}-${day} ${hours}:${minutes}:${seconds}`;
-  }
-
-  /**
-   * 移除emoji图标
-   */
-  private removeEmojis(text: string): string {
-    if (!this.emojisDisabled) {
-      return text;
-    }
-    return text.replace(EMOJI_REGEX, '').trim();
-  }
-
-  /**
-   * 格式化日志消息
-   */
-  private formatMessage(level: LogLevel, message: string, ...args: unknown[]): string {
-    // 移除emoji图标（如果需要）
-    const cleanMessage = this.removeEmojis(message);
-    
-    const timestamp = this.formatTimestamp();
-    const levelStr = level.toUpperCase().padEnd(5);
-
-    let formattedMessage: string;
-
-    if (this.colorsDisabled) {
-      // 无颜色模式（用于MCP）
-      formattedMessage = `[${timestamp}] ${levelStr} ${cleanMessage}`;
-    } else {
-      // 有颜色模式（用于终端）
-      const color = LOG_COLORS[level];
-      formattedMessage = `${color}[${timestamp}] ${levelStr}${RESET_COLOR} ${cleanMessage}`;
-    }
-
-    if (args.length > 0) {
-      const argsStr = args.map(arg =>
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-      ).join(' ');
-      formattedMessage += ` ${argsStr}`;
-    }
-
-    return formattedMessage;
-  }
 
   /**
    * 输出日志
    */
   private log(level: LogLevel, message: string, ...args: unknown[]): void {
     if (!this.shouldLog(level)) return;
-
-    const formattedMessage = this.formatMessage(level, message, ...args);
-
-    // 控制台输出
     if (level === 'error') {
-      console.error(formattedMessage);
+      console.error(message, ...args);
     } else if (level === 'warn') {
-      console.warn(formattedMessage);
+      console.warn(message, ...args);
     } else {
-      console.log(formattedMessage);
+      console.log(message, ...args);
     }
-
-    // 文件输出（去除颜色代码）
-    if (this.fileLoggingEnabled && this.logFile) {
-      try {
-        const cleanMessage = this.removeColorCodes(formattedMessage);
-        fs.appendFileSync(this.logFile, cleanMessage + '\n');
-      } catch (error) {
-        console.error('写入日志文件失败:', error);
-      }
-    }
-  }
-
-  /**
-   * 移除颜色代码
-   */
-  private removeColorCodes(text: string): string {
-    return text.replace(/\x1b\[[0-9;]*m/g, '');
   }
 
   /**

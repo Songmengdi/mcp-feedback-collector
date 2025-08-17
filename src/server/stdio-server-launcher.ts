@@ -59,8 +59,8 @@ export class StdioServerLauncher {
       this.activeServers.set(clientId, mcpServer);
 
       const status = mcpServer.getStatus();
-      logger.info(`[stdio-${shortId}] 服务器启动成功!`);
-      logger.info(`[stdio-${shortId}] 反馈收集服务: http://localhost:${status.webPort}`);
+      logger.debug(`[stdio-${shortId}] 服务器启动成功!`);
+      logger.debug(`[stdio-${shortId}] 反馈收集服务: http://localhost:${status.webPort}`);
 
 
       // 设置进程退出时的清理
@@ -90,21 +90,21 @@ export class StdioServerLauncher {
   private setupCleanupHandlers(clientId: string, shortId: string): void {
     // SIGINT处理器
     process.on('SIGINT', async () => {
-      logger.info(`[stdio-${shortId}] 收到SIGINT信号，正在关闭服务器...`);
+      logger.debug(`[stdio-${shortId}] 收到SIGINT信号，正在关闭服务器...`);
       await this.cleanupClient(clientId);
       process.exit(0);
     });
 
     // SIGTERM处理器
     process.on('SIGTERM', async () => {
-      logger.info(`[stdio-${shortId}] 收到SIGTERM信号，正在关闭服务器...`);
+      logger.debug(`[stdio-${shortId}] 收到SIGTERM信号，正在关闭服务器...`);
       await this.cleanupClient(clientId);
       process.exit(0);
     });
 
     // 进程退出处理器
     process.on('exit', () => {
-      logger.info(`[stdio-${shortId}] 进程退出，清理资源...`);
+      logger.debug(`[stdio-${shortId}] 进程退出，清理资源...`);
       // 注意：exit事件中不能使用异步操作
     });
 
@@ -130,25 +130,23 @@ export class StdioServerLauncher {
     const shortId = clientId.split('_').pop()?.substr(0, 8) || 'unknown';
     
     try {
-      logger.info(`[stdio-${shortId}] 开始清理客户端资源...`);
+      logger.debug(`[stdio-${shortId}] 开始清理客户端资源...`);
 
       // 停止MCP服务器
       const mcpServer = this.activeServers.get(clientId);
       if (mcpServer) {
-        logger.info(`[stdio-${shortId}] 停止MCP服务器...`);
+        logger.debug(`[stdio-${shortId}] 停止MCP服务器...`);
         await mcpServer.stop();
         this.activeServers.delete(clientId);
       }
 
       // 销毁WebServer实例
-      logger.info(`[stdio-${shortId}] 销毁WebServer实例...`);
+      logger.debug(`[stdio-${shortId}] 销毁WebServer实例...`);
       await this.webServerManager.destroyInstance(clientId);
 
-      logger.info(`[stdio-${shortId}] 客户端资源清理完成`);
+      logger.debug(`[stdio-${shortId}] 客户端资源清理完成`);
 
-    } catch (error) {
-      logger.error(`[stdio-${shortId}] 清理客户端资源失败:`, error);
-      throw error;
+    } catch (_) {
     }
   }
 
@@ -156,7 +154,7 @@ export class StdioServerLauncher {
    * 清理所有客户端资源
    */
   async cleanup(): Promise<void> {
-    logger.info('开始清理所有stdio客户端资源...');
+    logger.debug('开始清理所有stdio客户端资源...');
 
     const cleanupPromises: Promise<void>[] = [];
 
@@ -174,7 +172,7 @@ export class StdioServerLauncher {
     // 清理WebServer管理器
     await this.webServerManager.cleanup();
 
-    logger.info('所有stdio客户端资源清理完成');
+    logger.debug('所有stdio客户端资源清理完成');
   }
 
   /**

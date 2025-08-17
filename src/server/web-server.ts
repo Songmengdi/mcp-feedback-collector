@@ -2047,9 +2047,7 @@ export class WebServer {
       // 简单等待端口释放
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-    } catch (error) {
-      logger.error('停止Web服务器时出错:', error);
-      throw error;
+    } catch (_) {
     }
   }
 

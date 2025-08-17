@@ -123,16 +123,18 @@ export function getConfig(): Config {
 
 /**
  * 显示配置信息（隐藏敏感信息）
+ * 注意：在 stdio 模式下，这些信息会发送到 stderr 而不是 stdout
  */
 export function displayConfig(config: Config): void {
-  console.log('MCP Feedback Collector Configuration:');
-  console.log(`Web Port: 动态分配`);
-  console.log(`Dialog Timeout: ${config.dialogTimeout}s`);
-  console.log(`CORS Origin: ${config.corsOrigin}`);
-  console.log(`Max File Size: ${(config.maxFileSize / 1024 / 1024).toFixed(1)}MB`);
-  console.log(`Log Level: ${config.logLevel}`);
-  console.log(`Server Host: ${config.serverHost || '自动检测'}`);
-  console.log(`Server Base URL: ${config.serverBaseUrl || '自动生成'}`);
-  console.log(`Transport Mode: ${config.transportMode || TransportMode.STDIO}`);
-  console.log(`MCP HTTP Port: ${config.mcpPort || 'N/A'}`);
+  // 使用 stderr 避免在 stdio 模式下污染 MCP 协议通信
+  process.stderr.write('MCP Feedback Collector Configuration:\n');
+  process.stderr.write(`Web Port: 动态分配\n`);
+  process.stderr.write(`Dialog Timeout: ${config.dialogTimeout}s\n`);
+  process.stderr.write(`CORS Origin: ${config.corsOrigin}\n`);
+  process.stderr.write(`Max File Size: ${(config.maxFileSize / 1024 / 1024).toFixed(1)}MB\n`);
+  process.stderr.write(`Log Level: ${config.logLevel}\n`);
+  process.stderr.write(`Server Host: ${config.serverHost || '自动检测'}\n`);
+  process.stderr.write(`Server Base URL: ${config.serverBaseUrl || '自动生成'}\n`);
+  process.stderr.write(`Transport Mode: ${config.transportMode || TransportMode.STDIO}\n`);
+  process.stderr.write(`MCP HTTP Port: ${config.mcpPort || 'N/A'}\n`);
 }

@@ -41,17 +41,6 @@ async function startMCPServer(options: {
     // 使用新的模式检测逻辑
     const modeStatus = detectMCPModeStatus(options.mode);
     
-    // 根据检测结果设置日志
-    if (modeStatus.shouldDisableColors) {
-      logger.disableColors();
-    }
-    
-    // 在MCP模式下禁用emoji图标
-    if (modeStatus.isStdio) {
-      logger.disableEmojis();
-      logger.disableColors();
-    }
-    
     // 加载配置并覆盖传输模式
     const config = getConfig();
     config.transportMode = modeStatus.transportMode;
@@ -66,6 +55,8 @@ async function startMCPServer(options: {
       logger.setLevel(config.logLevel as any);
     }
 
+    logger.setModel(modeStatus.transportMode);
+
     if (!modeStatus.isMCP) {
       logger.debug(`启动模式: 交互模式 (传输模式: ${modeStatus.transportMode}, TTY: ${process.stdin.isTTY})`);
     } else {
@@ -78,8 +69,6 @@ async function startMCPServer(options: {
     if (!modeStatus.isMCP && (options.debug || process.env['LOG_LEVEL'] === 'debug')) {
       config.logLevel = 'debug';
 
-      // 启用文件日志记录
-      logger.enableFileLogging();
       logger.setLevel('debug');
       logger.debug('调试模式已启用，日志将保存到文件');
     }
@@ -188,7 +177,6 @@ async function startDevServer(): Promise<void> {
     
     // 设置调试日志
     logger.setLevel('debug');
-    logger.enableFileLogging();
     
     // 创建带固定端口的WebServer实例
     const webServer = new WebServer(config, 10050);

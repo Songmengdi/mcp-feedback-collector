@@ -99,6 +99,7 @@ export class MCPServer {
           logger.error('collect_feedback工具调用失败:', error);
 
           if (error instanceof MCPError) {
+            logger.error('collect_feedback工具调用失败:', error);
             throw error;
           }
 
@@ -250,7 +251,7 @@ export class MCPServer {
         transport = this.transports[sessionId];
       } else if (!sessionId && isInitializeRequest(req.body)) {
         // 新的初始化请求
-        console.log('new-sessionId', sessionId);
+        logger.debug('新建会话ID:', sessionId);
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (sessionId) => {
@@ -306,7 +307,7 @@ export class MCPServer {
     }
     
     const transport = this.transports[sessionId];
-    console.log('sessionId', sessionId);
+    logger.debug('处理会话ID:', sessionId);
     await transport.handleRequest(req, res);
   }
 
