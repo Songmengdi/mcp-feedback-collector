@@ -18,7 +18,7 @@ RUN npm install --omit=dev
 # 复制前端目录的 package.json
 COPY frontend/package*.json ./frontend/
 
-# 安装前端依赖
+# 创建前端目录并安装所有依赖（包括开发依赖用于构建）
 RUN cd frontend && npm install
 
 # 复制前端源码
