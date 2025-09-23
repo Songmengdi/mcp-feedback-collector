@@ -13,13 +13,13 @@ ENV LOG_LEVEL=info
 COPY package*.json ./
 
 # 安装根目录依赖
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # 复制前端目录的 package.json
 COPY frontend/package*.json ./frontend/
 
 # 安装前端依赖
-RUN cd frontend && npm ci
+RUN cd frontend && npm install
 
 # 复制前端源码
 COPY frontend/ ./frontend/
@@ -32,13 +32,13 @@ COPY src/ ./src/
 COPY tsconfig.json ./
 
 # 安装开发依赖用于编译
-RUN npm install --only=dev
+RUN npm install --include=dev
 
 # 编译 TypeScript
 RUN npm run build:backend
 
 # 清理开发依赖
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # 复制其他必要文件
 COPY LICENSE ./
