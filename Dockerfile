@@ -18,14 +18,23 @@ RUN npm install --omit=dev
 # 复制前端目录的 package.json
 COPY frontend/package*.json ./frontend/
 
+# 临时设置开发环境以安装devDependencies
+ENV NODE_ENV=development
+
 # 创建前端目录并安装所有依赖（包括开发依赖用于构建）
 RUN cd frontend && npm install
+
+# 添加前端node_modules/.bin到PATH
+ENV PATH /app/frontend/node_modules/.bin:$PATH
 
 # 复制前端源码
 COPY frontend/ ./frontend/
 
 # 构建前端
 RUN cd frontend && npm run build
+
+# 恢复生产环境
+ENV NODE_ENV=production
 
 # 复制后端源码
 COPY src/ ./src/
