@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mcp-feedback-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-feedback-collector
+    restart: unless-stopped
+    ports:
+      - "3001:3001"   # MCP HTTP 端口
+      - "10050:10050" # Web 界面端口
+    environment:
+      - NODE_ENV=production
+      - MCP_TRANSPORT_MODE=mcp
+      - LOG_LEVEL=info
+      - MCP_HTTP_PORT=3001
+      - MCP_DIALOG_TIMEOUT=60000
+      - MCP_CORS_ORIGIN=*
+      - MCP_MAX_FILE_SIZE=10485760
+    volumes:
+      - ./logs:/app/logs                    # 日志目录
+      - ./data:/app/data                    # 数据目录
+      - mcp_config:/app/.mcp_feedback       # 配置目录
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mcp_config:
+    driver: local
+
+networks:
+  mcp-network:
+    driver: bridge
